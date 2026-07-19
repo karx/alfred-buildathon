@@ -1,0 +1,5 @@
+{
+  "eventType": "nudge-ack",
+  "nudgeId": "nudge-demo-1",
+  "response": "acknowledged"
+}

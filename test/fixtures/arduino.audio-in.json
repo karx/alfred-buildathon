@@ -1,0 +1,6 @@
+{
+  "eventType": "audio-in",
+  "source": "desk-mic",
+  "transcript": "Captured audio transcript goes here",
+  "confidence": 0.9
+}

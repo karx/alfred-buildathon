@@ -1,0 +1,26 @@
+{
+  "name": "alfred-buildathon",
+  "version": "0.1.0",
+  "description": "Alfred: local-first knowledge and task orchestration system.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "test": "node --test test/contract/*.test.js test/adapters/*.test.js",
+    "test:adapter": "node test/adapterHarness.js"
+  },
+  "keywords": [
+    "alfred",
+    "knowledge-base",
+    "obsidian",
+    "automation",
+    "hardware"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.80",
+    "@anthropic-ai/sdk": "^0.112.3",
+    "@google/genai": "^2.12.0",
+    "@google/generative-ai": "^0.24.1"
+  }
+}

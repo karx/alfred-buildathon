@@ -1,0 +1,10 @@
+{
+  "source": "vault",
+  "type": "vault.file.changed",
+  "payload": {
+    "changeType": "change",
+    "path": "/tmp/example.md",
+    "relativePath": "example.md",
+    "exists": true
+  }
+}
