@@ -10,6 +10,7 @@ const DEFAULT_STATE = {
   nowState: { mode: "focus", context: "" },
   inbox: [],
   seenMeetingIds: [],
+  seenVaultPaths: [],
   pendingBuzzer: false,
   lastProcessedAt: null,
 };
@@ -60,10 +61,33 @@ function createStateStore({ filePath }) {
     },
 
     async addInboxItem(item) {
+      // Dedup vault events: skip if same path already queued
+      if (item.source === "vault") {
+        const vPath = item.payload?.relativePath;
+        if (vPath && state.inbox.some((i) => i.source === "vault" && i.payload?.relativePath === vPath)) {
+          return state;
+        }
+      }
       state = { ...state, inbox: [item, ...state.inbox].slice(0, 200) };
       await persist();
       notify();
       return state;
+    },
+
+    async drainInbox(processedItems) {
+      const keys = new Set(processedItems.map((i) => `${i.source}:${i.timestamp}`));
+      // Track vault paths that have been processed
+      const newVaultPaths = processedItems
+        .filter((i) => i.source === "vault" && i.payload?.relativePath)
+        .map((i) => i.payload.relativePath);
+      const seenVaultPaths = [...new Set([...(state.seenVaultPaths || []), ...newVaultPaths])].slice(-500);
+      state = {
+        ...state,
+        inbox: state.inbox.filter((i) => !keys.has(`${i.source}:${i.timestamp}`)),
+        seenVaultPaths,
+      };
+      await persist();
+      notify();
     },
 
     async markMeetingSeen(meetingId) {

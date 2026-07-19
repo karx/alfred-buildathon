@@ -162,6 +162,9 @@ Return ONLY valid JSON, no markdown fences:
         lastProcessedAt: new Date().toISOString(),
       });
 
+      // Drain processed items from inbox
+      if (items.length > 0) await stateStore.drainInbox(items);
+
       if (outputHub) {
         await outputHub.publish({
           channel: "alfred.processing.done",

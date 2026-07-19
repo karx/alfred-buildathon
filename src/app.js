@@ -7,6 +7,7 @@ const { createPipeline } = require("./pipeline/pipeline");
 const { createLocalServer } = require("./server/localServer");
 const { createAuditLog } = require("./verification/auditLog");
 const { createSkillRunner } = require("./processing/skillRunner");
+const { createKnowledgeBase } = require("./processing/knowledgeBase");
 
 const INBOX_SOURCES = new Set(["granola", "vault"]);
 const POLL_INTERVAL_MS = Number(process.env.ALFRED_POLL_MS) || 60000;
@@ -34,6 +35,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       inputHub = createInputHub({ settingsStore, stateStore });
       pipeline = createPipeline({ inputHub, outputHub });
       skillRunner = createSkillRunner({ stateStore, outputHub });
+      const knowledgeBase = createKnowledgeBase({ settingsStore });
 
       server = createLocalServer({
         settingsStore,
@@ -46,12 +48,21 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       // Wire: new events from inbox sources → skill runner
       inputHub.subscribe(async (event) => {
         if (!INBOX_SOURCES.has(event.source)) return;
+
         const item = {
           source: event.source,
           type: event.type,
           timestamp: event.timestamp,
           payload: event.payload,
         };
+
+        // Persist Granola meetings to vault KB immediately
+        if (event.source === "granola" && event.type === "granola.meeting.new") {
+          knowledgeBase.writeMeetingNote(event.payload).catch((e) =>
+            console.error("[KB] Write error:", e.message)
+          );
+        }
+
         await stateStore.addInboxItem(item);
         skillRunner.processNewItems([item]).catch((e) =>
           console.error("[App] Skill runner error:", e.message)

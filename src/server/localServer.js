@@ -111,6 +111,20 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       return;
     }
 
+    // Set now-mode explicitly (focus / meeting / sparring)
+    if (req.method === "POST" && url.pathname === "/api/alfred/set-mode") {
+      const body = await readBody(req);
+      const VALID_MODES = new Set(["focus", "meeting", "sparring"]);
+      if (!body.mode || !VALID_MODES.has(body.mode)) {
+        sendJson(res, 400, { ok: false, message: "mode must be focus|meeting|sparring" });
+        return;
+      }
+      await stateStore.patch({ nowState: { mode: body.mode, context: body.context || "" } });
+      if (outputHub) await outputHub.publish({ channel: "alfred.state.updated", timestamp: new Date().toISOString(), reason: "set-mode", mode: body.mode });
+      sendJson(res, 200, { ok: true, nowState: stateStore.get().nowState });
+      return;
+    }
+
     // Nudge acknowledgement
     if (req.method === "POST" && url.pathname === "/api/alfred/nudge-ack") {
       const body = await readBody(req);
@@ -176,11 +190,38 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
     notFound(res);
   }
 
+  let heartbeatTimer = null;
+
+  // Trim state for SSE broadcast — omit large fields not needed by the UI
+  function trimStateForSse(state) {
+    const { inbox, seenMeetingIds, ...rest } = state;
+    return rest;
+  }
+
   return {
     async start(port = settingsStore.get().port || 3737) {
+      // Wire outputHub events → SSE
       outputHub.onPublish((event) => {
         for (const client of sseClients) sendSse(client, event);
       });
+
+      // Wire stateStore changes → SSE with embedded state (no second round-trip)
+      if (stateStore) {
+        stateStore.onChange((state) => {
+          const payload = {
+            channel: "alfred.state.updated",
+            timestamp: new Date().toISOString(),
+            state: trimStateForSse(state),
+          };
+          for (const client of sseClients) sendSse(client, payload);
+        });
+      }
+
+      // Heartbeat every 20s to keep connections alive
+      heartbeatTimer = setInterval(() => {
+        const ping = { channel: "sse.heartbeat", timestamp: new Date().toISOString(), clients: sseClients.size };
+        for (const client of sseClients) sendSse(client, ping);
+      }, 20000);
 
       server = http.createServer((req, res) => {
         handle(req, res).catch((error) => {
@@ -193,6 +234,7 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
     },
 
     async stop() {
+      if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
       for (const client of sseClients) client.end();
       sseClients.clear();
       if (server) await new Promise((resolve) => server.close(resolve));
