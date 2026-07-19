@@ -149,6 +149,99 @@ function createSettingsPage() {
     input[type=text]:focus, textarea:focus { border-color: var(--indigo); }
     textarea { min-height: 100px; font-family: "SF Mono","Fira Code",monospace; resize: vertical; }
 
+    /* ── Vault path picker ──────────────────────────────── */
+    .path-row {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+    .path-row input[type=text] { flex: 1; min-width: 0; }
+    .path-row button { flex-shrink: 0; white-space: nowrap; }
+    .path-hint {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+      min-height: 1.2em;
+    }
+    .path-hint.ok { color: var(--green); }
+    .path-hint.warn { color: var(--yellow); }
+    .path-hint.err { color: var(--red); }
+    .path-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .path-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .path-checks input[type=checkbox] { accent-color: var(--indigo); }
+    .folder-browser {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+      overflow: hidden;
+      display: none;
+    }
+    .folder-browser.open { display: block; }
+    .fb-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface3);
+      flex-wrap: wrap;
+    }
+    .fb-path {
+      flex: 1;
+      min-width: 0;
+      font-family: "SF Mono","Fira Code",monospace;
+      font-size: 11px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fb-list {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .fb-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text);
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+    }
+    .fb-item:hover { background: var(--surface3); color: var(--indigo); }
+    .fb-item .fb-icon { opacity: 0.7; flex-shrink: 0; }
+    .fb-empty { padding: 16px 12px; font-size: 12px; color: var(--muted); text-align: center; }
+    .fb-footer {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+      background: var(--surface3);
+    }
+
     /* ── Buttons ────────────────────────────────────────── */
     .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     button {
@@ -602,13 +695,43 @@ function makeAdapterBody(a) {
     }
   }
 
-  // Vault: path input
+  // Vault: path input + native/in-page folder picker
   if (a.id === 'vault') {
     var vaultPath = (a.config && a.config.vaultPath) || '';
+    var createIfMissing = a.config && a.config.createIfMissing === false ? false : true;
+    var pathPlaceholder = navigator.platform && /Win/i.test(navigator.platform)
+      ? 'D:\\\\Notes\\\\AlfredVault'
+      : '/Users/you/AlfredVault';
     html += '<label>Vault path</label>' +
-      '<input type="text" id="vault-path-' + a.id + '" value="' + esc(vaultPath) + '" ' +
-      'placeholder="/Users/you/AlfredVault" ' +
-      'onchange="syncVaultPath()">';
+      '<div class="path-row">' +
+        '<input type="text" id="vault-path-' + a.id + '" value="' + esc(vaultPath) + '" ' +
+          'placeholder="' + pathPlaceholder + '" ' +
+          'autocomplete="off" spellcheck="false" ' +
+          'oninput="onVaultPathInput()" onchange="onVaultPathInput()" />' +
+        '<button type="button" class="btn-primary" id="vault-browse-native" ' +
+          'onclick="pickVaultFolderNative()" title="Open system folder dialog">Browse…</button>' +
+        '<button type="button" id="vault-browse-toggle" ' +
+          'onclick="toggleVaultBrowser()" title="Browse folders in this page">▾</button>' +
+      '</div>' +
+      '<div class="path-hint" id="vault-path-hint">Enter or browse to an Obsidian-style vault folder</div>' +
+      '<div class="path-checks">' +
+        '<label><input type="checkbox" id="vault-create-missing"' +
+          (createIfMissing ? ' checked' : '') +
+          ' onchange="syncVaultPath()" /> Create folder if missing</label>' +
+      '</div>' +
+      '<div class="folder-browser" id="vault-folder-browser">' +
+        '<div class="fb-bar">' +
+          '<button type="button" onclick="vaultBrowseParent()" title="Parent folder">↑</button>' +
+          '<button type="button" onclick="vaultBrowseHome()" title="Home">⌂</button>' +
+          '<span class="fb-path" id="vault-fb-path">—</span>' +
+          '<button type="button" onclick="vaultBrowseRefresh()" title="Refresh">↻</button>' +
+        '</div>' +
+        '<div class="fb-list" id="vault-fb-list"><div class="fb-empty">Loading…</div></div>' +
+        '<div class="fb-footer">' +
+          '<button type="button" class="btn-success" onclick="vaultBrowserUseCurrent()">Use this folder</button>' +
+          '<button type="button" onclick="toggleVaultBrowser(false)">Close</button>' +
+        '</div>' +
+      '</div>';
   }
 
   // Config JSON
@@ -657,25 +780,204 @@ function makeAdapterBody(a) {
 }
 
 function attachAdapterEvents(id) {
-  var pathEl = document.getElementById('vault-path-' + id);
-  if (pathEl) {
-    pathEl.addEventListener('input', function() {
-      syncVaultPath(id);
-    });
+  if (id === 'vault') {
+    // Debounced path check after first paint
+    setTimeout(function() { checkVaultPath(); }, 50);
   }
+}
+
+var _vaultCheckTimer = null;
+var _vaultBrowsePath = '';
+
+function onVaultPathInput() {
+  syncVaultPath();
+  if (_vaultCheckTimer) clearTimeout(_vaultCheckTimer);
+  _vaultCheckTimer = setTimeout(checkVaultPath, 350);
 }
 
 function syncVaultPath(id) {
   id = id || 'vault';
   var pathEl = document.getElementById('vault-path-' + id);
   var cfgEl  = document.getElementById('cfg-' + id);
+  var createEl = document.getElementById('vault-create-missing');
   if (!pathEl || !cfgEl) return;
   try {
     var cfg = JSON.parse(cfgEl.value || '{}');
-    cfg.vaultPath = pathEl.value;
-    if (cfg.createIfMissing === undefined) cfg.createIfMissing = true;
+    cfg.vaultPath = pathEl.value.trim();
+    cfg.createIfMissing = createEl ? !!createEl.checked : true;
     cfgEl.value = JSON.stringify(cfg, null, 2);
   } catch(_) {}
+}
+
+function setVaultPath(p) {
+  var pathEl = document.getElementById('vault-path-vault');
+  if (!pathEl) return;
+  pathEl.value = p || '';
+  onVaultPathInput();
+}
+
+async function checkVaultPath() {
+  var pathEl = document.getElementById('vault-path-vault');
+  var hint = document.getElementById('vault-path-hint');
+  if (!pathEl || !hint) return;
+  var p = (pathEl.value || '').trim();
+  if (!p) {
+    hint.className = 'path-hint';
+    hint.textContent = 'Enter or browse to an Obsidian-style vault folder';
+    return;
+  }
+  hint.className = 'path-hint';
+  hint.textContent = 'Checking…';
+  try {
+    var r = await fetch('/api/system/check-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: p })
+    });
+    var j = await r.json();
+    if (j.ok) {
+      hint.className = 'path-hint ok';
+      hint.textContent = '✓ ' + (j.message || j.path);
+    } else if (j.exists === false) {
+      var createEl = document.getElementById('vault-create-missing');
+      hint.className = 'path-hint warn';
+      hint.textContent = '○ ' + (j.message || 'Does not exist') +
+        (createEl && createEl.checked ? ' — will create on connect' : '');
+    } else {
+      hint.className = 'path-hint err';
+      hint.textContent = '✗ ' + (j.message || 'Invalid path');
+    }
+  } catch (e) {
+    hint.className = 'path-hint err';
+    hint.textContent = 'Could not check path: ' + e.message;
+  }
+}
+
+async function pickVaultFolderNative() {
+  var pathEl = document.getElementById('vault-path-vault');
+  var st = document.getElementById('status-vault');
+  var btn = document.getElementById('vault-browse-native');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  if (st) show(st, 'Opening system folder dialog… (look for a dialog behind the browser if needed)', 'info');
+  try {
+    var r = await fetch('/api/system/pick-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startPath: pathEl ? pathEl.value : '' })
+    });
+    var j = await r.json();
+    if (j.ok && j.path) {
+      setVaultPath(j.path);
+      if (st) show(st, 'Selected: ' + j.path, 'ok');
+      toggleVaultBrowser(false);
+    } else if (j.cancelled) {
+      if (st) show(st, 'Folder selection cancelled', 'info');
+    } else {
+      if (st) show(st, (j.message || 'Native picker unavailable') + ' — use the in-page browser ▾', 'err');
+      toggleVaultBrowser(true);
+    }
+  } catch (e) {
+    if (st) show(st, 'Picker failed: ' + e.message, 'err');
+    toggleVaultBrowser(true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Browse…'; }
+  }
+}
+
+function toggleVaultBrowser(force) {
+  var el = document.getElementById('vault-folder-browser');
+  if (!el) return;
+  var open = typeof force === 'boolean' ? force : !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  var tbtn = document.getElementById('vault-browse-toggle');
+  if (tbtn) tbtn.textContent = open ? '▴' : '▾';
+  if (open) {
+    var pathEl = document.getElementById('vault-path-vault');
+    var start = (pathEl && pathEl.value.trim()) || _vaultBrowsePath || '';
+    vaultBrowseLoad(start);
+  }
+}
+
+async function vaultBrowseLoad(dirPath) {
+  var list = document.getElementById('vault-fb-list');
+  var pathLabel = document.getElementById('vault-fb-path');
+  if (!list) return;
+  list.innerHTML = '<div class="fb-empty">Loading…</div>';
+  try {
+    var q = dirPath ? ('?path=' + encodeURIComponent(dirPath)) : '';
+    var r = await fetch('/api/system/browse-folder' + q);
+    var j = await r.json();
+    if (!j.ok) {
+      list.innerHTML = '<div class="fb-empty">' + esc(j.message || 'Cannot list folder') + '</div>';
+      if (pathLabel) pathLabel.textContent = dirPath || '—';
+      // Still allow navigating up via parent if provided
+      if (j.parent) _vaultBrowsePath = j.path || dirPath;
+      return;
+    }
+    _vaultBrowsePath = j.path;
+    if (pathLabel) pathLabel.textContent = j.path;
+
+    var items = [];
+    // Drive roots when at a drive root on Windows (or always show home jump is separate)
+    if (j.roots && j.roots.length && !j.parent) {
+      j.roots.forEach(function(root) {
+        items.push({ path: root, name: root, icon: '🗄' });
+      });
+    }
+    (j.entries || []).forEach(function(e) {
+      items.push({ path: e.path, name: e.name, icon: '📁' });
+    });
+
+    if (!items.length) {
+      list.innerHTML = '<div class="fb-empty">No subfolders here — click “Use this folder” if this is the vault</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    items.forEach(function(item) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fb-item';
+      btn.innerHTML = '<span class="fb-icon">' + item.icon + '</span><span></span>';
+      btn.querySelector('span:last-child').textContent = item.name;
+      btn.addEventListener('click', function() { vaultBrowseLoad(item.path); });
+      btn.addEventListener('dblclick', function() {
+        vaultBrowseLoad(item.path);
+      });
+      list.appendChild(btn);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="fb-empty">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+function vaultBrowseParent() {
+  if (!_vaultBrowsePath) { vaultBrowseLoad(''); return; }
+  // Ask server for parent via browse of dirname — load current then use parent from response
+  fetch('/api/system/browse-folder?path=' + encodeURIComponent(_vaultBrowsePath))
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (j.parent) vaultBrowseLoad(j.parent);
+      else if (j.home) vaultBrowseLoad(j.home);
+      else vaultBrowseLoad('');
+    })
+    .catch(function() { vaultBrowseLoad(''); });
+}
+
+function vaultBrowseHome() {
+  vaultBrowseLoad('');
+}
+
+function vaultBrowseRefresh() {
+  vaultBrowseLoad(_vaultBrowsePath || '');
+}
+
+function vaultBrowserUseCurrent() {
+  if (_vaultBrowsePath) {
+    setVaultPath(_vaultBrowsePath);
+    var st = document.getElementById('status-vault');
+    if (st) show(st, 'Selected: ' + _vaultBrowsePath, 'ok');
+  }
 }
 
 function toggleCard(id) {

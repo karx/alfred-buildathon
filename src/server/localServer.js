@@ -6,6 +6,7 @@ const { resolveFabricateRequest, listScenarios } = require("../demo/nudgeFabrica
 const { resolveStagePack, buildStageApplication, listStagePacks } = require("../demo/demoStage");
 const { idleGreetingDisplay } = require("./idleGreeting");
 const { listSkills, getSkill, isRunnable } = require("../processing/skillRegistry");
+const { pickFolderNative, listDirectory, checkFolder } = require("./folderPicker");
 
 function createLocalServer({ settingsStore, adapterManager, actuatorManager, outputHub, auditLog, stateStore, skillRunner, skillScheduler, inputHitLog }) {
   let server = null;
@@ -69,6 +70,28 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
 
     if (req.method === "GET" && url.pathname === "/health") {
       sendJson(res, 200, { ok: true, appName: settingsStore.get().appName || "Finalizing Alfred" });
+      return;
+    }
+
+    // ── System: vault folder picker / browser ─────────────────────
+    if (req.method === "POST" && url.pathname === "/api/system/pick-folder") {
+      const body = await readBody(req).catch(() => ({}));
+      const result = await pickFolderNative({ startPath: body.startPath || body.path });
+      sendJson(res, result.ok ? 200 : result.cancelled ? 200 : 500, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/system/browse-folder") {
+      const dirPath = url.searchParams.get("path") || "";
+      const result = await listDirectory(dirPath);
+      sendJson(res, result.ok ? 200 : 404, result);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/system/check-folder") {
+      const body = await readBody(req).catch(() => ({}));
+      const result = await checkFolder(body.path || body.vaultPath || "");
+      sendJson(res, 200, result);
       return;
     }
 
