@@ -95,24 +95,24 @@ Named skill registry with settings toggles and run-now — SKILLS_DESIGN.md Phas
 
 ## Item 4 — Skill scheduler (SKILLS_DESIGN Phase 2)
 
-**Status:** `todo` · **Depends on:** Item 3 · **Size:** M
+**Status:** `done` · **Depends on:** Item 3 · **Size:** M · **Completed:** 2026-07-20
 
 Replace ad-hoc timers with a scheduler driven by the registry + settings. **Adopted defaults** (operator may veto): garden-kb **skips when no vault adapter is connected** (extends its existing skip-if-pipeline-busy guard); scheduler **serializes skill runs** (skip-if-processing), which retires SKILLS_DESIGN open question 4 (write collisions).
 
 ### Red
-- [ ] `test/processing/skillScheduler.test.js` — failing tests (inject fake timers/clock):
-  - [ ] scheduler reads `settings.skills` and arms one timer per enabled scheduled skill.
-  - [ ] disabling a skill in settings disarms its timer without restart (hot-reload).
-  - [ ] a due skill is **skipped, not queued**, while another skill/pipeline run is in flight (serialization).
-  - [ ] garden-kb does not fire when no vault is connected.
+- [x] `test/processing/skillScheduler.test.js` — failing tests (inject fake timers/clock):
+  - [x] scheduler reads `settings.skills` and arms one timer per enabled scheduled skill.
+  - [x] disabling a skill in settings disarms its timer without restart (hot-reload).
+  - [x] a due skill is **skipped, not queued**, while another skill/pipeline run is in flight (serialization).
+  - [x] garden-kb does not fire when no vault is connected.
 
 ### Green
-- [ ] `src/processing/skillScheduler.js` — timers from registry + settings, hot-reload on settings change.
-- [ ] Remove the ad-hoc `ALFRED_GARDEN_MS` `setInterval` from `src/app.js`; garden becomes a scheduled registry skill.
+- [x] `src/processing/skillScheduler.js` — timers from registry + settings, hot-reload on settings change.
+- [x] Remove the ad-hoc `ALFRED_GARDEN_MS` `setInterval` from `skillRunner.startPeriodic`; garden becomes a scheduled registry skill wired from `app.js`.
 
 ### Refactor / close-out
-- [ ] Full `npm test` green; Item 2 contract tests still green (scheduler must not change `/api/state` or SSE shapes).
-- [ ] Update CURRENT_STATE.md §4 (Garden row → scheduler-driven) and §6.
+- [x] Full `npm test` green; Item 2 contract tests still green (scheduler must not change `/api/state` or SSE shapes).
+- [x] Update CURRENT_STATE.md §4 (Garden row → scheduler-driven) and §6.
 
 ---
 
@@ -156,3 +156,4 @@ CI workflow (GitHub Actions `npm ci && npm test` — repo has remote `github.com
 | 2026-07-20 | 1 | `starts[]` shipped. Normalizer + applyStarts pure helpers; hopExtract prompt; suite 66/66 green. |
 | 2026-07-20 | 2 | Desk-companion contract + Arduino sim e2e frozen; physical checklist in ARDUINO_FIRMWARE.md; await clearBuzzer on /api/state. |
 | 2026-07-20 | 3 | Skills registry Phase 1: SKILL_REGISTRY, settings.skills, GET/POST /api/skills, Settings cards. |
+| 2026-07-20 | 4 | Skill scheduler Phase 2: fake-timer tests; garden-kb vault-gated; serialize skip-if-busy; garden interval removed from skillRunner. |

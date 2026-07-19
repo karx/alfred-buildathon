@@ -7,7 +7,7 @@ const { resolveStagePack, buildStageApplication, listStagePacks } = require("../
 const { idleGreetingDisplay } = require("./idleGreeting");
 const { listSkills, getSkill, isRunnable } = require("../processing/skillRegistry");
 
-function createLocalServer({ settingsStore, adapterManager, actuatorManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
+function createLocalServer({ settingsStore, adapterManager, actuatorManager, outputHub, auditLog, stateStore, skillRunner, skillScheduler, inputHitLog }) {
   let server = null;
   const sseClients = new Set();
 
@@ -194,6 +194,9 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
       const enabled = Boolean(body.enabled);
       try {
         const entry = await settingsStore.updateSkill(skillId, { enabled });
+        if (skillScheduler && typeof skillScheduler.reload === "function") {
+          skillScheduler.reload();
+        }
         sendJson(res, 200, { ok: true, skillId, enabled: entry.enabled });
       } catch (err) {
         sendJson(res, 400, { ok: false, message: err.message });

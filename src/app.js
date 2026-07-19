@@ -8,6 +8,7 @@ const { createPipeline } = require("./pipeline/pipeline");
 const { createLocalServer } = require("./server/localServer");
 const { createAuditLog } = require("./verification/auditLog");
 const { createSkillRunner } = require("./processing/skillRunner");
+const { createSkillScheduler } = require("./processing/skillScheduler");
 const { createKnowledgeBase } = require("./processing/knowledgeBase");
 const { resolveFabricateRequest } = require("./demo/nudgeFabricator");
 
@@ -45,6 +46,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
   let pipeline;
   let server;
   let skillRunner;
+  let skillScheduler;
 
   return {
     async start() {
@@ -56,6 +58,10 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       actuatorManager = createActuatorManager({ settingsStore, stateStore, outputHub });
       pipeline = createPipeline({ inputHub, outputHub });
       skillRunner = createSkillRunner({ stateStore, outputHub });
+      skillScheduler = createSkillScheduler({
+        settingsStore,
+        skillRunner,
+      });
       const knowledgeBase = createKnowledgeBase({ settingsStore });
 
       const inputHitLog = inputHub.getHitLog();
@@ -64,6 +70,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
         settingsStore,
         stateStore,
         skillRunner,
+        skillScheduler,
         adapterManager: inputHub.getAdapterManager(),
         actuatorManager,
         outputHub,
@@ -164,12 +171,14 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       await inputHub.start();
       await actuatorManager.start();
       skillRunner.startPeriodic(POLL_INTERVAL_MS);
+      skillScheduler.start();
       await server.start(port);
 
       console.log(`Alfred state loaded. TODOs: ${(stateStore.get().todos || []).length}, Nudges: ${(stateStore.get().nudges || []).filter((n) => !n.acked).length}`);
     },
 
     async stop() {
+      if (skillScheduler) skillScheduler.stop();
       if (skillRunner) skillRunner.stopPeriodic();
       if (actuatorManager) await actuatorManager.stop();
       if (server) await server.stop();

@@ -293,13 +293,10 @@ Return ONLY a valid JSON array (no markdown fences):
 
 // ── Orchestrator ──────────────────────────────────────────────────
 
-const GARDEN_INTERVAL_MS = Number(process.env.ALFRED_GARDEN_MS) || 15 * 60 * 1000; // 15 min default
-
 function createSkillRunner({ stateStore, outputHub }) {
   let running = false;
   let pending = [];
   let periodicTimer = null;
-  let gardenTimer = null;
 
   function isRunning() {
     return running;
@@ -553,23 +550,17 @@ function createSkillRunner({ stateStore, outputHub }) {
     },
 
     startPeriodic(intervalMs = 60000) {
+      // Inbox drain only — garden is armed by skillScheduler (Phase 2).
       periodicTimer = setInterval(async () => {
         const state = stateStore.get();
         if ((state.inbox || []).length > 0 && !running) {
           await run(state.inbox.slice());
         }
       }, intervalMs);
-
-      // Garden timer — independent, fires every ALFRED_GARDEN_MS
-      console.log(`[Garden] Scheduling every ${GARDEN_INTERVAL_MS / 60000}min`);
-      gardenTimer = setInterval(() => {
-        runGarden().catch((e) => console.error("[Garden] Timer error:", e.message));
-      }, GARDEN_INTERVAL_MS);
     },
 
     stopPeriodic() {
       if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = null; }
-      if (gardenTimer)   { clearInterval(gardenTimer);   gardenTimer = null; }
     },
   };
 }

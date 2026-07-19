@@ -146,12 +146,15 @@ Stage 4  hopSummary → daily brief string
          patch state · drain inbox · SSE done
 ```
 
-**Garden (separate track):**
+**Garden / scheduled skills (skillScheduler):**
 
 ```txt
-every ALFRED_GARDEN_MS (default 15m)  or  POST /api/alfred/garden
+skillScheduler arms interval timers from registry + settings.skills
+  garden-kb: ALFRED_GARDEN_MS (default 15m) · skips if busy or no vault connected
+  daily-notes: default 24h interval when enabled
+  POST /api/alfred/garden · POST /api/skills/:id/run-now
   → hopGarden fills missing vaultHint on open todos
-  → skips if main pipeline is running
+  → runs serialize (skip-if-processing), not queue
 ```
 
 | Hop | Job | Independent fail? |
@@ -230,6 +233,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | Pipeline | `src/pipeline/pipeline.js` |
 | Skill hops | `src/processing/skillRunner.js` |
 | Skills registry (Phase 1) | `src/processing/skillRegistry.js` · `GET/POST /api/skills` · Settings cards |
+| Skill scheduler (Phase 2) | `src/processing/skillScheduler.js` · replaces ad-hoc garden interval |
 | Meeting notes | `src/processing/knowledgeBase.js` |
 | State | `src/state/stateStore.js` |
 | Vault mirror | `src/state/vaultStateSync.js` |
