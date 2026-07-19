@@ -281,6 +281,7 @@ function createLivePage() {
     <span class="crt-date" id="crt-date"></span>
     <div id="conn-dot"></div>
     <span id="conn-label">OFFLINE</span>
+    <a href="/demo" class="crt-link-btn" style="text-decoration:none;display:inline-flex;align-items:center;border:1px solid var(--p-dim);color:var(--p-dim);padding:2px 8px;font-size:9px;letter-spacing:1px;margin-right:6px;">DEMO</a>
     <button id="trigger-btn" onclick="triggerPoll()">POLL</button>
   </div>
 
@@ -501,7 +502,13 @@ function createLivePage() {
 
   <!-- Nudges -->
   <div class="crt-section">
-    <div class="sec-hdr">▸ NUDGES</div>
+    <div class="sec-hdr">▸ NUDGES
+      <span style="float:right;font-weight:400;letter-spacing:0;">
+        <button class="ack-btn" onclick="fabricateDemo('buzzer')" title="Fabricate demo nudge">+ DEMO</button>
+        <button class="ack-btn" onclick="fabricateDemo('critical')" title="Critical pack">CRIT</button>
+        <button class="ack-btn" onclick="clearDemoNudges()" title="Clear demo nudges">CLR</button>
+      </span>
+    </div>
     <div id="nudges-list"><div class="empty-col">// NO ACTIVE NUDGES</div></div>
   </div>
 
@@ -651,7 +658,7 @@ function createLivePage() {
       const items = groups[status];
       document.getElementById("col-" + key).innerHTML = items.length
         ? items.map(t => \`<div class="todo-item">
-            \${checkFor(status, t.priority)}
+            <span class="tchk-click" onclick="cycleTodo('\${esc(t.id)}','\${status}')">\${checkFor(status, t.priority)}</span>
             <div class="tbody">
               \${esc(t.text)}
               \${t.suggestion ? \`<div class="tsugg">&gt; \${esc(t.suggestion)}</div>\` : ""}
@@ -677,6 +684,40 @@ function createLivePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nudgeId: id }),
+      });
+      await fetchState();
+    } catch(e) {}
+  }
+
+  async function fabricateDemo(scenario) {
+    try {
+      await fetch("/api/alfred/nudge/fabricate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenario: scenario || "buzzer", replace: true }),
+      });
+      await fetchState();
+    } catch(e) {}
+  }
+
+  async function clearDemoNudges() {
+    try {
+      await fetch("/api/alfred/nudge/clear-demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      await fetchState();
+    } catch(e) {}
+  }
+
+  async function cycleTodo(id, current) {
+    const next = current === "todo" ? "in_progress" : current === "in_progress" ? "done" : "todo";
+    try {
+      await fetch("/api/alfred/todo-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: next }),
       });
       await fetchState();
     } catch(e) {}

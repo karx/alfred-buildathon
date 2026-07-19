@@ -8,9 +8,27 @@ const { createLocalServer } = require("./server/localServer");
 const { createAuditLog } = require("./verification/auditLog");
 const { createSkillRunner } = require("./processing/skillRunner");
 const { createKnowledgeBase } = require("./processing/knowledgeBase");
+const { resolveFabricateRequest } = require("./demo/nudgeFabricator");
 
 const INBOX_SOURCES = new Set(["granola", "vault"]);
 const POLL_INTERVAL_MS = Number(process.env.ALFRED_POLL_MS) || 60000;
+
+function isNudgeAckEvent(event) {
+  if (!event || event.source !== "arduino-in") return false;
+  if (event.type === "arduino-in.hardware.nudge-ack") return true;
+  // Physical ACK button: { eventType: "button", button: "nudge-ack"|"ack" }
+  if (event.type === "arduino-in.hardware.button") {
+    const btn = String(event.payload?.button || "").toLowerCase();
+    return btn === "nudge-ack" || btn === "ack";
+  }
+  return false;
+}
+
+function isNudgeFabricateEvent(event) {
+  if (!event || event.source !== "arduino-in") return false;
+  return event.type === "arduino-in.hardware.nudge-fabricate"
+    || event.type === "arduino-in.hardware.demo-nudge";
+}
 
 function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
   const settingsStore = createSettingsStore({
@@ -37,17 +55,77 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       skillRunner = createSkillRunner({ stateStore, outputHub });
       const knowledgeBase = createKnowledgeBase({ settingsStore });
 
+      const inputHitLog = inputHub.getHitLog();
+
       server = createLocalServer({
         settingsStore,
         stateStore,
         skillRunner,
         adapterManager: inputHub.getAdapterManager(),
         outputHub,
+        inputHitLog,
         auditLog: createAuditLog({ filePath: path.join(projectRoot, "config/verification.audit.jsonl") }),
       });
 
-      // Wire: new events from inbox sources → skill runner
+      // Mirror input hits onto SSE so /demo + /settings see them live
+      if (inputHitLog) {
+        inputHitLog.onHit((hit) => {
+          outputHub.publish({
+            channel: "alfred.input.hit",
+            timestamp: hit.timestamp,
+            hit,
+          }).catch(() => {});
+        });
+      }
+
+      // Wire: input events → state / skill runner
       inputHub.subscribe(async (event) => {
+        // Hardware nudge-ack: ack the active State API nudge (or explicit nudgeId)
+        if (event.source === "arduino-in" && isNudgeAckEvent(event)) {
+          const nudgeId = event.payload?.nudgeId || null;
+          const result = await stateStore.ackNudge(nudgeId);
+          console.log(`[App] Hardware nudge-ack: ${result.message}`);
+          await outputHub.publish({
+            channel: "alfred.nudge.acked",
+            timestamp: new Date().toISOString(),
+            ok: result.ok,
+            nudgeId: result.ackedId,
+            source: "arduino-in",
+            response: event.payload?.response || "acknowledged",
+          });
+          return;
+        }
+
+        // Hardware/demo: fabricate a nudge on demand
+        if (event.source === "arduino-in" && isNudgeFabricateEvent(event)) {
+          const resolved = resolveFabricateRequest({
+            scenario: event.payload?.scenario,
+            text: event.payload?.text,
+            priority: event.payload?.priority,
+            replace: event.payload?.replace,
+            source: "demo",
+          });
+          if (!resolved.ok) {
+            console.warn(`[App] Hardware nudge-fabricate rejected: ${resolved.message}`);
+            await outputHub.publish({
+              channel: "alfred.nudge.fabricate-error",
+              timestamp: new Date().toISOString(),
+              message: resolved.message,
+            });
+            return;
+          }
+          const result = await stateStore.fabricateNudges(resolved.nudges, { replace: resolved.replace });
+          console.log(`[App] Hardware nudge-fabricate: ${result.message}`);
+          await outputHub.publish({
+            channel: "alfred.nudge.fabricated",
+            timestamp: new Date().toISOString(),
+            count: result.added?.length || 0,
+            nudgeIds: (result.added || []).map((n) => n.id),
+            source: "arduino-in",
+          });
+          return;
+        }
+
         if (!INBOX_SOURCES.has(event.source)) return;
 
         const item = {

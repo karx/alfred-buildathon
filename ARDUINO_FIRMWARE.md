@@ -16,10 +16,22 @@ Alfred exposes `GET http://<ALFRED_IP>:3737/api/state` returning:
   "led": "green | yellow | red | blue",
   "display": "text up to 20 chars",
   "buzzer": false,
+  "nudgeId": "n_abc123 | null",
+  "nudgeText": "active nudge text | null",
+  "nudgeCount": 0,
   "processingStatus": "idle | processing",
   "lastUpdatedAt": "2026-07-19T10:00:00Z"
 }
 ```
+
+When `nudgeId` is non-null (and usually `led` is red), a physical ACK button should POST:
+
+```
+POST /api/adapters/arduino-in/ingest
+{ "eventType": "nudge-ack", "response": "acknowledged" }
+```
+
+Omit `nudgeId` to clear the currently displayed nudge. Optionally pass `"nudgeId": "<from /api/state>"`.
 
 ## LED Mapping
 
@@ -137,6 +149,19 @@ Headers:
   x-alfred-secret: <sharedSecret>
 Body:
   { "eventType": "button", "button": "sparring", "state": "pressed" }
+```
+
+### Nudge ACK (active State API nudge)
+
+```
+// Preferred — acks whatever /api/state is showing
+{ "eventType": "nudge-ack", "response": "acknowledged" }
+
+// Physical button alias
+{ "eventType": "button", "button": "nudge-ack", "state": "pressed" }
+
+// Explicit id from last GET /api/state
+{ "eventType": "nudge-ack", "nudgeId": "n_abc123", "response": "acknowledged" }
 ```
 
 ## Setup Steps

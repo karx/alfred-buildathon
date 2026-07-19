@@ -35,13 +35,32 @@ class ArduinoInAdapter extends AdapterContract {
           }
         },
         {
+          id: "nudge-fabricate",
+          label: "Fabricate Demo Nudge",
+          description: "Create a demo nudge on demand. Use scenario (critical|buildathon|meeting|focus|queue|buzzer) or custom text. Triggers LED/buzzer via /api/state.",
+          payload: {
+            eventType: "nudge-fabricate",
+            scenario: "buzzer",
+            replace: true
+          }
+        },
+        {
           id: "nudge-ack",
           label: "Nudge Ack",
-          description: "Acknowledge or snooze a nudge from hardware.",
+          description: "Acknowledge the active nudge from GET /api/state. Omit nudgeId to ack the one currently shown on the hardware display; or pass the nudgeId returned by /api/state.",
           payload: {
             eventType: "nudge-ack",
-            nudgeId: "nudge-demo-1",
             response: "acknowledged"
+          }
+        },
+        {
+          id: "nudge-ack-button",
+          label: "Nudge Ack Button",
+          description: "Physical ACK button — same effect as nudge-ack; clears the active State API nudge.",
+          payload: {
+            eventType: "button",
+            button: "nudge-ack",
+            state: "pressed"
           }
         },
         {

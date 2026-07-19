@@ -1,8 +1,11 @@
 const http = require("http");
 const { createSettingsPage } = require("./settingsPage");
 const { createLivePage } = require("./livePage");
+const { createDemoPage } = require("./demoPage");
+const { resolveFabricateRequest, listScenarios } = require("../demo/nudgeFabricator");
+const { resolveStagePack, buildStageApplication, listStagePacks } = require("../demo/demoStage");
 
-function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore, skillRunner }) {
+function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
   let server = null;
   const sseClients = new Set();
 
@@ -50,6 +53,12 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/demo") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(createDemoPage());
+      return;
+    }
+
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/live")) {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(createLivePage());
@@ -82,13 +91,14 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
     if (req.method === "GET" && url.pathname === "/api/state") {
       const state = stateStore ? stateStore.get() : {};
       const nudges = (state.nudges || []).filter((n) => !n.acked);
+      const activeNudge = nudges[0] || null;
       const isProcessing = state.processingStatus === "processing";
       const isInMeeting = state.nowState?.mode === "meeting";
 
       let led = "green";
       let display = "Finalizing Alfred";
       if (isProcessing) { led = "red"; display = "Processing..."; }
-      else if (nudges.length > 0) { led = "red"; display = nudges[0].text.slice(0, 20); }
+      else if (activeNudge) { led = "red"; display = String(activeNudge.text || "").slice(0, 20); }
       else if (isInMeeting) { led = "blue"; display = (state.nowState?.context || "In meeting").slice(0, 20); }
 
       const buzzer = nudges.length > 0;
@@ -98,6 +108,10 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
         led,
         display,
         buzzer,
+        // Hardware can POST nudge-ack with this id, or omit id to ack this active nudge.
+        nudgeId: activeNudge?.id || null,
+        nudgeText: activeNudge ? String(activeNudge.text || "").slice(0, 40) : null,
+        nudgeCount: nudges.length,
         processingStatus: state.processingStatus || "idle",
         lastUpdatedAt: state.lastProcessedAt || new Date().toISOString(),
       });
@@ -143,13 +157,150 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       return;
     }
 
-    // Nudge acknowledgement
+    // Nudge acknowledgement — nudgeId optional; omit to ack the active State API nudge
+    if (req.method === "POST" && url.pathname === "/api/alfred/todo-status") {
+      const body = await readBody(req);
+      if (!body.id || !body.status) {
+        sendJson(res, 400, { ok: false, message: "id and status required" });
+        return;
+      }
+      const result = await stateStore.setTodoStatus(body.id, body.status);
+      if (!result.ok) { sendJson(res, 404, result); return; }
+      if (outputHub) await outputHub.publish({
+        channel: "alfred.state.updated",
+        timestamp: new Date().toISOString(),
+        reason: "todo-status",
+        todoId: body.id,
+        status: body.status,
+      });
+      sendJson(res, 200, result);
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/alfred/nudge-ack") {
       const body = await readBody(req);
-      if (!body.nudgeId) { sendJson(res, 400, { ok: false, message: "nudgeId required" }); return; }
-      if (stateStore) await stateStore.ackNudge(body.nudgeId);
-      if (outputHub) await outputHub.publish({ channel: "alfred.state.updated", timestamp: new Date().toISOString(), reason: "nudge-ack", nudgeId: body.nudgeId });
-      sendJson(res, 200, { ok: true });
+      if (!stateStore) { sendJson(res, 503, { ok: false, message: "State store unavailable" }); return; }
+      const result = await stateStore.ackNudge(body.nudgeId || null);
+      if (outputHub && result.ok) {
+        await outputHub.publish({
+          channel: "alfred.state.updated",
+          timestamp: new Date().toISOString(),
+          reason: "nudge-ack",
+          nudgeId: result.ackedId,
+        });
+      }
+      sendJson(res, result.ok ? 200 : 404, {
+        ok: result.ok,
+        nudgeId: result.ackedId,
+        message: result.message,
+      });
+      return;
+    }
+
+    // List demo nudge scenarios (for UI / docs)
+    if (req.method === "GET" && url.pathname === "/api/alfred/nudge/scenarios") {
+      sendJson(res, 200, { ok: true, scenarios: listScenarios() });
+      return;
+    }
+
+    // Full backstage demo stage packs
+    if (req.method === "GET" && url.pathname === "/api/alfred/demo/packs") {
+      sendJson(res, 200, { ok: true, packs: listStagePacks() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/alfred/demo/stage") {
+      if (!stateStore) { sendJson(res, 503, { ok: false, message: "State store unavailable" }); return; }
+      const body = await readBody(req);
+      const resolved = resolveStagePack(body.pack || body.stage || "full");
+      if (!resolved.ok) {
+        sendJson(res, 400, resolved);
+        return;
+      }
+      const app = buildStageApplication(resolved.pack, {
+        replaceTodos: body.replaceTodos !== false,
+      });
+      const result = await stateStore.applyDemoStage(app);
+      if (outputHub) {
+        await outputHub.publish({
+          channel: "alfred.demo.stage",
+          timestamp: new Date().toISOString(),
+          pack: resolved.packId,
+          label: resolved.label,
+          todoCount: result.todoCount,
+          activeNudges: result.activeNudges,
+        });
+      }
+      sendJson(res, 200, {
+        ok: true,
+        message: `Loaded stage pack: ${resolved.label}`,
+        pack: resolved.packId,
+        label: resolved.label,
+        todoCount: result.todoCount,
+        activeNudges: result.activeNudges,
+        nowState: result.nowState,
+      });
+      return;
+    }
+
+    // Fabricate / create nudges on demand (demo + custom)
+    if (req.method === "POST" && url.pathname === "/api/alfred/nudge/fabricate") {
+      if (!stateStore) { sendJson(res, 503, { ok: false, message: "State store unavailable" }); return; }
+      const body = await readBody(req);
+      const resolved = resolveFabricateRequest(body);
+      if (!resolved.ok) {
+        sendJson(res, 400, resolved);
+        return;
+      }
+      const result = await stateStore.fabricateNudges(resolved.nudges, { replace: resolved.replace });
+      if (outputHub && result.ok) {
+        await outputHub.publish({
+          channel: "alfred.nudge.fabricated",
+          timestamp: new Date().toISOString(),
+          count: result.added.length,
+          nudgeIds: result.added.map((n) => n.id),
+          scenario: body.scenario || null,
+        });
+      }
+      sendJson(res, result.ok ? 201 : 400, {
+        ok: result.ok,
+        message: result.message,
+        added: result.added,
+        activeCount: result.activeCount,
+        statePreview: {
+          nudgeId: result.added[0]?.id || null,
+          nudgeText: result.added[0]?.text || null,
+        },
+      });
+      return;
+    }
+
+    // Clear only demo/fabricated unacked nudges
+    if (req.method === "POST" && url.pathname === "/api/alfred/nudge/clear-demo") {
+      if (!stateStore) { sendJson(res, 503, { ok: false, message: "State store unavailable" }); return; }
+      const result = await stateStore.clearDemoNudges();
+      if (outputHub) {
+        await outputHub.publish({
+          channel: "alfred.nudge.demo-cleared",
+          timestamp: new Date().toISOString(),
+          removed: result.removed,
+        });
+      }
+      sendJson(res, 200, result);
+      return;
+    }
+
+    // Input hit log — every adapter event + failed HTTP ingest attempts
+    if (req.method === "GET" && url.pathname === "/api/alfred/input-hits") {
+      const limit = Number(url.searchParams.get("limit") || 100);
+      const hits = inputHitLog ? inputHitLog.getRecent(limit) : [];
+      sendJson(res, 200, { ok: true, count: hits.length, hits });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/alfred/input-hits/clear") {
+      if (inputHitLog) inputHitLog.clear();
+      sendJson(res, 200, { ok: true, message: "Input hit log cleared" });
       return;
     }
 
@@ -189,6 +340,26 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       const [, adapterId] = adapterIngest;
       const payload = await readBody(req);
       const result = await adapterManager.ingest(adapterId, payload, { headers: req.headers });
+      // Success is logged when the adapter publishes; failures (auth, not connected) never publish
+      if (inputHitLog && !result.ok) {
+        const hit = inputHitLog.recordIngest({
+          adapterId,
+          payload,
+          result,
+          path: url.pathname,
+        });
+        console.warn(`[Input] HTTP FAIL ${adapterId}: ${hit.message || result.message}`);
+        if (outputHub) {
+          outputHub.publish({
+            channel: "alfred.input.hit",
+            timestamp: hit.timestamp,
+            hit,
+          }).catch(() => {});
+        }
+      } else if (inputHitLog && result.ok && !result.event) {
+        // Edge case: accepted without publish
+        inputHitLog.recordIngest({ adapterId, payload, result, path: url.pathname });
+      }
       sendJson(res, result.status || (result.ok ? 202 : 400), result);
       return;
     }

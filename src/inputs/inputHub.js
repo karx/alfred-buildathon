@@ -1,10 +1,23 @@
 const { createAdapterManager } = require("./adapterManager");
+const { createInputHitLog } = require("./inputHitLog");
 
-function createInputHub({ settingsStore, stateStore }) {
+function createInputHub({ settingsStore, stateStore, hitLogLimit = 200 } = {}) {
   const subscribers = new Set();
   const adapterManager = createAdapterManager({ settingsStore, stateStore });
+  const hitLog = createInputHitLog({ limit: hitLogLimit });
 
   async function publish(event) {
+    // Log every input hit before handlers (demo backstage + console)
+    try {
+      const hit = hitLog.recordEvent(event, { transport: "adapter" });
+      const summary = hit.payload
+        ? " " + JSON.stringify(hit.payload)
+        : "";
+      console.log(`[Input] ${hit.source} → ${hit.type}${summary}`);
+    } catch (err) {
+      console.error("[Input] hit log error:", err.message);
+    }
+
     for (const subscriber of subscribers) {
       await subscriber(event);
     }
@@ -31,6 +44,10 @@ function createInputHub({ settingsStore, stateStore }) {
 
     getAdapterManager() {
       return adapterManager;
+    },
+
+    getHitLog() {
+      return hitLog;
     },
   };
 }

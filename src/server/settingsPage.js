@@ -276,6 +276,7 @@ function createSettingsPage() {
   <div id="sse-dot" title="SSE connection"></div>
   <div class="nav-links">
     <a href="/settings" class="nav-link active">Settings</a>
+    <a href="/demo" class="nav-link">Demo</a>
     <a href="/live" class="nav-link">Live Dashboard</a>
   </div>
 </nav>
@@ -315,8 +316,31 @@ function createSettingsPage() {
       <div id="proc-log-line"></div>
       <div class="btn-row">
         <button onclick="pollGranola()">Poll Granola Now</button>
+        <a href="/demo" style="text-decoration:none"><button>Demo Backstage</button></a>
         <a href="/live" style="text-decoration:none"><button>Open Live Dashboard</button></a>
       </div>
+    </div>
+
+    <!-- Demo nudge fabricator (full controls on /demo) -->
+    <div class="panel">
+      <div class="section-title">Demo Nudges</div>
+      <p style="color:var(--muted);font-size:11px;margin-bottom:10px;">
+        Quick fabricate for hardware. Full stage packs (todos + brief + modes) live on
+        <a href="/demo" style="color:var(--indigo);">/demo</a> backstage.
+      </p>
+      <div class="btn-row" style="flex-wrap:wrap;gap:6px;">
+        <button onclick="loadFullDemo()">Full Working Demo</button>
+        <button onclick="fabricateNudge('buzzer', true)">Buzz Demo</button>
+        <button onclick="fabricateNudge('critical', true)">Critical</button>
+        <button onclick="fabricateNudge('buildathon', true)">Buildathon Pack</button>
+        <button onclick="clearDemoNudges()" style="border-color:var(--red);color:var(--red);">Clear Demo</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px;gap:6px;align-items:center;">
+        <input id="custom-nudge-text" type="text" maxlength="40" placeholder="Custom nudge (max 40 chars)"
+          style="flex:1;min-width:0;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;" />
+        <button onclick="fabricateCustomNudge()">Create</button>
+      </div>
+      <div id="demo-nudge-status" class="status-box" style="margin-top:8px;"></div>
     </div>
 
     <!-- Events Feed -->
@@ -396,6 +420,53 @@ async function pollGranola() {
     await post('/api/adapters/granola/actions/poll-now', {});
     setTimeout(loadAlfredState, 2000);
   } catch(e) {}
+}
+
+async function loadFullDemo() {
+  var el = document.getElementById('demo-nudge-status');
+  try {
+    var j = await post('/api/alfred/demo/stage', { pack: 'full' });
+    show(el, j.message || 'Full demo loaded', 'ok');
+    loadAlfredState();
+  } catch(e) {
+    show(el, e.message || String(e), 'err');
+  }
+}
+
+async function fabricateNudge(scenario, replace) {
+  var el = document.getElementById('demo-nudge-status');
+  try {
+    var j = await post('/api/alfred/nudge/fabricate', { scenario: scenario, replace: !!replace });
+    show(el, j.message + ' → ' + (j.statePreview && j.statePreview.nudgeText ? j.statePreview.nudgeText : ''), 'ok');
+    loadAlfredState();
+  } catch(e) {
+    show(el, e.message || String(e), 'err');
+  }
+}
+
+async function fabricateCustomNudge() {
+  var el = document.getElementById('demo-nudge-status');
+  var text = (document.getElementById('custom-nudge-text').value || '').trim();
+  if (!text) { show(el, 'Enter custom nudge text', 'err'); return; }
+  try {
+    var j = await post('/api/alfred/nudge/fabricate', { text: text, priority: 'high', replace: false });
+    show(el, j.message + ' → ' + text, 'ok');
+    document.getElementById('custom-nudge-text').value = '';
+    loadAlfredState();
+  } catch(e) {
+    show(el, e.message || String(e), 'err');
+  }
+}
+
+async function clearDemoNudges() {
+  var el = document.getElementById('demo-nudge-status');
+  try {
+    var j = await post('/api/alfred/nudge/clear-demo', {});
+    show(el, j.message || 'Cleared', 'ok');
+    loadAlfredState();
+  } catch(e) {
+    show(el, e.message || String(e), 'err');
+  }
 }
 
 // ── Events feed ────────────────────────────────────────────────────

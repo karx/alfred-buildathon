@@ -74,6 +74,26 @@ function classifyItem(item) {
   return "unknown";
 }
 
+// Drop meta-tasks even if the LLM emits them despite prompt rules.
+// Each pattern is a lowercase substring match against the action text.
+const META_TASK_PATTERNS = [
+  /^if\s/i,                    // "If X then..."
+  /^determine\s+if\s/i,
+  /^review\s+(the\s+)?(content|note|file)\s/i,
+  /^plan\s/i,
+  /^understand\s/i,
+  /^identify\s/i,
+  /^check\s+if\s/i,
+  /^based\s+on\s/i,
+];
+
+function isMetaTask(text) {
+  const t = (text || "").trim();
+  if (!t) return true;
+  if (t.length > 120) return true; // long procedural chains
+  return META_TASK_PATTERNS.some((re) => re.test(t));
+}
+
 // Deterministic merge: same ID → preserve status, update priority/suggestion
 // New ID → insert with status=todo
 function mergeTodos(existing, incoming) {
@@ -101,6 +121,12 @@ function mergeTodos(existing, incoming) {
 // Hop 1 — per item: extract concrete actions
 async function hopExtract(item) {
   const prompt = `Extract actionable todos from this single inbox item. Be specific and concrete.
+
+RULES:
+- Return at most 2 actions per item.
+- Each must be a single concrete task the user can do RIGHT NOW (a verb + object, ≤80 chars).
+- NO meta-tasks: do not output "Review X", "Determine if Y", "Plan Z", "If W then...", "Understand...". If the only useful action would be a meta-task, return 0 actions.
+- Only extract tasks explicitly mentioned in the content. Do not infer follow-ups, tests, or hypotheticals.
 
 SOURCE: ${item.source}
 TYPE: ${item.type}
@@ -147,7 +173,10 @@ Return ONLY a valid JSON array (no markdown fences).`;
 
 // Hop 3 — after reprioritize: generate nudges
 async function hopNudges(todos, nowState) {
-  const high = todos.filter((t) => t.priority === "high" && t.status !== "done").slice(0, 5);
+  // Only nudge on actionable work: status must be "todo" (not in_progress, not done)
+  const high = todos
+    .filter((t) => t.priority === "high" && t.status === "todo")
+    .slice(0, 5);
   if (!high.length) return [];
 
   const prompt = `Generate 1-3 nudges for the user right now. Max 40 characters each — they appear on a hardware display.
@@ -253,16 +282,22 @@ function createSkillRunner({ stateStore, outputHub }) {
         }
 
         if (extracted.actions?.length) {
-          const incoming = extracted.actions.map((a) => ({
-            id:       todoId(a.text),
-            text:     a.text,
-            priority: a.priority || "medium",
-            source:   item.source,
-            dueDate:  a.dueDate || null,
-          }));
-          const merged = mergeTodos(todos, incoming);
-          todos = merged.todos;
-          if (merged.added) console.log(`[SkillRunner] Merged ${merged.added} new todo(s)`);
+          const incoming = extracted.actions
+            .filter((a) => !isMetaTask(a.text))
+            .map((a) => ({
+              id:       todoId(a.text),
+              text:     a.text,
+              priority: a.priority || "medium",
+              source:   item.source,
+              dueDate:  a.dueDate || null,
+            }));
+          const dropped = extracted.actions.length - incoming.length;
+          if (dropped > 0) console.log(`[SkillRunner] Dropped ${dropped} meta-task(s)`);
+          if (incoming.length) {
+            const merged = mergeTodos(todos, incoming);
+            todos = merged.todos;
+            if (merged.added) console.log(`[SkillRunner] Merged ${merged.added} new todo(s)`);
+          }
         }
 
         processedItems.push(item);
