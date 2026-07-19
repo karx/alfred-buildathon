@@ -2,7 +2,7 @@ const http = require("http");
 const { createSettingsPage } = require("./settingsPage");
 const { createLivePage } = require("./livePage");
 
-function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore }) {
+function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore, skillRunner }) {
   let server = null;
   const sseClients = new Set();
 
@@ -57,7 +57,7 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
     }
 
     if (req.method === "GET" && url.pathname === "/health") {
-      sendJson(res, 200, { ok: true, appName: settingsStore.get().appName || "Alfred" });
+      sendJson(res, 200, { ok: true, appName: settingsStore.get().appName || "Finalizing Alfred" });
       return;
     }
 
@@ -86,12 +86,12 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       const isInMeeting = state.nowState?.mode === "meeting";
 
       let led = "green";
-      let display = "Sup gopal";
-      if (isProcessing) { led = "yellow"; display = "Processing..."; }
+      let display = "Finalizing Alfred";
+      if (isProcessing) { led = "red"; display = "Processing..."; }
       else if (nudges.length > 0) { led = "red"; display = nudges[0].text.slice(0, 20); }
       else if (isInMeeting) { led = "blue"; display = (state.nowState?.context || "In meeting").slice(0, 20); }
 
-      const buzzer = Boolean(state.pendingBuzzer);
+      const buzzer = nudges.length > 0;
       if (buzzer && stateStore) stateStore.clearBuzzer().catch(() => {});
 
       sendJson(res, 200, {
@@ -108,6 +108,24 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
     if (req.method === "GET" && url.pathname === "/api/alfred/state") {
       const state = stateStore ? stateStore.get() : {};
       sendJson(res, 200, { ok: true, state });
+      return;
+    }
+
+    // Manually trigger garden
+    if (req.method === "POST" && url.pathname === "/api/alfred/garden") {
+      if (skillRunner) skillRunner.runGarden().catch((e) => console.error("[Garden] Manual trigger error:", e.message));
+      sendJson(res, 202, { ok: true, message: "Garden run triggered" });
+      return;
+    }
+
+    // Manually trigger skill runner on queued inbox
+    if (req.method === "POST" && url.pathname === "/api/alfred/process") {
+      const state = stateStore ? stateStore.get() : {};
+      const inbox = state.inbox || [];
+      if (!inbox.length) { sendJson(res, 200, { ok: true, message: "Inbox empty, nothing to process" }); return; }
+      // Fire async — respond immediately
+      if (skillRunner) skillRunner.processNewItems(inbox.slice()).catch((e) => console.error("[App] Process trigger error:", e.message));
+      sendJson(res, 202, { ok: true, message: `Processing ${inbox.length} inbox item(s)` });
       return;
     }
 

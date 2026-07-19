@@ -40,6 +40,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       server = createLocalServer({
         settingsStore,
         stateStore,
+        skillRunner,
         adapterManager: inputHub.getAdapterManager(),
         outputHub,
         auditLog: createAuditLog({ filePath: path.join(projectRoot, "config/verification.audit.jsonl") }),

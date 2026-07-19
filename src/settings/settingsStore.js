@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const DEFAULT_SETTINGS = {
-  appName: "Alfred",
+  appName: "Finalizing Alfred",
   port: 3737,
   adapters: {},
   recentEventLimit: 100,
