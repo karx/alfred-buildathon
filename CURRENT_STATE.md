@@ -138,8 +138,8 @@ Meeting notes land in the vault **before** the LLM finishes processing.
 
 ```txt
 Stage 1  classify (deterministic) → hopExtract (LLM)
-           actions[] + closes[] → mergeTodos (stable content-hash IDs)
-           apply closes → status=done
+           actions[] + closes[] + starts[] → mergeTodos (stable content-hash IDs)
+           apply starts → status=in_progress (todo only); apply closes → status=done
 Stage 2  hopReprioritize → priority + suggestion
 Stage 3  hopNudges → 1–3 lines ≤40 chars (hardware display)
 Stage 4  hopSummary → daily brief string
@@ -157,7 +157,7 @@ every ALFRED_GARDEN_MS (default 15m)  or  POST /api/alfred/garden
 | Hop | Job | Independent fail? |
 |-----|-----|-------------------|
 | Classify | vault-note / meeting / skip | Yes (no LLM) |
-| Extract | actions + closes | Yes — item still drained |
+| Extract | actions + closes + starts | Yes — item still drained |
 | Merge | stable IDs; preserve human status | Deterministic |
 | Reprioritize | focus ranking | Yes |
 | Nudges | display lines | Yes |

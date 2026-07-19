@@ -117,9 +117,47 @@ function mergeTodos(existing, incoming) {
   return { todos: [...byId.values()], added };
 }
 
+// ── Extract result normalize + status transitions (pure, testable) ─
+
+function normalizeExtractResult(result) {
+  if (!result) return { actions: [], closes: [], starts: [], summary: "" };
+  return {
+    actions: Array.isArray(result.actions) ? result.actions : [],
+    closes:  Array.isArray(result.closes)  ? result.closes  : [],
+    starts:  Array.isArray(result.starts)  ? result.starts  : [],
+    summary: result.summary || "",
+  };
+}
+
+// Promote todo → in_progress only. Never demotes in_progress/done; ignores unknown IDs.
+// Returns { todos, accepted } so the orchestrator can log accepted IDs.
+function applyStarts(todos, starts, { startedBy } = {}) {
+  if (!starts?.length) return { todos, accepted: [] };
+  const eligible = new Set(
+    todos.filter((t) => t.status === "todo").map((t) => t.id)
+  );
+  const accepted = [];
+  let next = todos;
+  for (const id of starts) {
+    if (typeof id !== "string" || !eligible.has(id) || accepted.includes(id)) continue;
+    accepted.push(id);
+    next = next.map((t) =>
+      t.id === id
+        ? {
+            ...t,
+            status: "in_progress",
+            startedAt: new Date().toISOString(),
+            startedBy: startedBy || null,
+          }
+        : t
+    );
+  }
+  return { todos: next, accepted };
+}
+
 // ── LLM hops (each focused, each independently failable) ──────────
 
-// Hop 1 — per item: extract concrete actions AND identify existing todos that this item resolves
+// Hop 1 — per item: extract concrete actions AND identify existing todos that this item starts or resolves
 async function hopExtract(item, openTodos = []) {
   const discordHint =
     item.source === "discord"
@@ -137,6 +175,9 @@ ${discordHint}RULES:
 CLOSING EXISTING TODOS:
 The list below shows the user's currently OPEN todos (status=todo or in_progress). If this inbox item EXPLICITLY states or clearly confirms that one of them is now finished, resolved, sent, shipped, completed, or no longer needed, include its exact ID in "closes". Be conservative — only close on direct evidence (the meeting said "we sent the deck", the note says "fixed", etc.). Do NOT close based on inference, relatedness, or partial overlap. If unsure, return an empty closes array.
 
+STARTING EXISTING TODOS:
+If this inbox item EXPLICITLY states or clearly confirms that work on an open todo has begun (e.g. "started drafting X", "working on it now", "began the proposal"), include its exact ID in "starts". Be conservative — only start on direct evidence. Do NOT start based on inference or relatedness. Never include IDs that also appear in "closes". If unsure, return an empty starts array.
+
 OPEN TODOS (id | text | status):
 ${openTodos.map((t) => `- ${t.id} | ${t.text} | ${t.status}`).join("\n") || "(none)"}
 
@@ -150,19 +191,14 @@ Return ONLY valid JSON (no markdown fences):
     { "text": "Specific actionable task", "priority": "high|medium|low", "dueDate": "YYYY-MM-DD or null" }
   ],
   "closes": ["t_xxxxxxxx"],
+  "starts": ["t_xxxxxxxx"],
   "summary": "One sentence describing what this item is about"
 }
 
-If nothing is actionable and nothing closes, return { "actions": [], "closes": [], "summary": "..." }.`;
+If nothing is actionable, nothing closes, and nothing starts, return { "actions": [], "closes": [], "starts": [], "summary": "..." }.`;
 
   const text = await callLLM(prompt);
-  const result = parseJson(text);
-  if (!result) return { actions: [], closes: [], summary: "" };
-  return {
-    actions: Array.isArray(result.actions) ? result.actions : [],
-    closes:  Array.isArray(result.closes)  ? result.closes  : [],
-    summary: result.summary || "",
-  };
+  return normalizeExtractResult(parseJson(text));
 }
 
 // Hop 2 — after all items: reprioritize active todos
@@ -281,6 +317,7 @@ function createSkillRunner({ stateStore, outputHub }) {
 
       // ── Stage 1: per-item classify → extract → merge ─────────────
       const closedIds = new Set();
+      const startedIds = new Set();
       for (const item of items) {
         const kind = classifyItem(item);
 
@@ -292,18 +329,36 @@ function createSkillRunner({ stateStore, outputHub }) {
 
         await stateStore.patch({ processingLog: `[${provider}] Extracting from ${item.source} (${kind})...` });
 
-        // Open todos (non-done) are passed so the LLM can decide if this item closes any.
+        // Open todos (non-done) are passed so the LLM can decide if this item starts/closes any.
         const openTodos = todos.filter((t) => t.status !== "done");
 
-        let extracted = { actions: [], closes: [], summary: "" };
+        let extracted = { actions: [], closes: [], starts: [], summary: "" };
         try {
           extracted = await hopExtract(item, openTodos);
-          console.log(`[SkillRunner] Extracted ${extracted.actions?.length || 0} action(s), ${extracted.closes?.length || 0} close(s) from ${item.source}`);
+          console.log(
+            `[SkillRunner] Extracted ${extracted.actions?.length || 0} action(s), ` +
+            `${extracted.starts?.length || 0} start(s), ${extracted.closes?.length || 0} close(s) from ${item.source}`
+          );
         } catch (err) {
           console.error(`[SkillRunner] Extract failed (${item.source}):`, err.message);
         }
 
-// Apply closes: only valid IDs, only items currently not already done.
+        // Apply starts: only valid IDs currently at status=todo (never demote).
+        if (extracted.starts?.length) {
+          const candidates = extracted.starts.filter(
+            (id) => typeof id === "string" && !startedIds.has(id) && !closedIds.has(id)
+          );
+          const started = applyStarts(todos, candidates, { startedBy: item.source });
+          todos = started.todos;
+          for (const id of started.accepted) startedIds.add(id);
+          if (started.accepted.length > 0) {
+            console.log(
+              `[SkillRunner] Starting ${started.accepted.length} todo(s) [${started.accepted.join(", ")}] based on ${item.source}`
+            );
+          }
+        }
+
+        // Apply closes: only valid IDs, only items currently not already done.
         if (extracted.closes?.length) {
           const validIds = new Set(openTodos.map((t) => t.id));
           const accepted = [];
@@ -475,4 +530,4 @@ function createSkillRunner({ stateStore, outputHub }) {
   };
 }
 
-module.exports = { createSkillRunner };
+module.exports = { createSkillRunner, normalizeExtractResult, applyStarts };

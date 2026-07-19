@@ -1,5 +1,7 @@
 # Alfred TODO
 
+> Active execution plan for the current stretch (5 items, TDD, agent-first): **[EXECUTION.md](EXECUTION.md)**
+
 ## Milestone 1: Input substrate
 
 - [x] Fresh project in `~/kaaro/src/alfred-buildathon`
