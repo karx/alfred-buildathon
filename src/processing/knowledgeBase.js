@@ -30,6 +30,14 @@ function createKnowledgeBase({ settingsStore }) {
     const attendees = (meeting.attendees || []).map((a) => `- ${a.name || a.email || a}`).join("\n") || "- (none)";
     const summary = meeting.summary || meeting.ai_summary || "(no summary)";
     const notes = meeting.notes || meeting.content || "";
+    const owner = meeting.owner
+      ? `${meeting.owner.name || ""}${meeting.owner.email ? ` <${meeting.owner.email}>` : ""}`.trim()
+      : "";
+    const sharedLine = meeting.sharedWithMe
+      ? `- Shared with me: yes${owner ? ` (owner: ${owner})` : ""}`
+      : owner
+        ? `- Owner: ${owner}`
+        : null;
 
     const content = [
       `# ${title}`,
@@ -37,6 +45,7 @@ function createKnowledgeBase({ settingsStore }) {
       `- Date: ${date}`,
       `- Source: Granola`,
       `- Meeting ID: ${meeting.meetingId || meeting.id || ""}`,
+      sharedLine,
       "",
       "## Attendees",
       attendees,
@@ -48,7 +57,9 @@ function createKnowledgeBase({ settingsStore }) {
       "## Actions",
       "- [ ] ",
       "",
-    ].join("\n");
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
 
     await fs.promises.writeFile(filePath, content, "utf8");
     console.log(`[KB] Wrote meeting note: ${filename}`);

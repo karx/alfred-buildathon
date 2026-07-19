@@ -3,7 +3,8 @@ function createLivePage() {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#010601">
   <title>ALFRED OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,6 +21,14 @@ function createLivePage() {
       --orange: #ff8800;
       --blue:   #44aaff;
       --purple: #cc66ff;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-x: max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      overflow-x: hidden;
     }
 
     body {
@@ -29,6 +38,9 @@ function createLivePage() {
       font-size: 13px;
       line-height: 1.5;
       min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      width: 100%;
     }
 
     /* Scanlines overlay */
@@ -56,71 +68,132 @@ function createLivePage() {
 
     .screen {
       background: var(--bg);
+      width: 100%;
       max-width: 640px;
       margin: 0 auto;
-      padding: 14px;
+      padding: max(12px, var(--safe-t)) max(12px, var(--safe-x)) max(16px, var(--safe-b));
       min-height: 100vh;
+      min-height: 100dvh;
       box-shadow: 0 0 80px rgba(51,255,102,0.05) inset;
       animation: crt-flicker 14s ease-in-out infinite;
+      overflow-x: hidden;
     }
 
     /* ── Header ── */
     .crt-header {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
+      gap: 6px 8px;
       border-bottom: 1px solid var(--bdr);
-      padding-bottom: 9px;
-      margin-bottom: 14px;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      min-width: 0;
     }
     .crt-title {
       font-size: 11px;
       font-weight: bold;
-      letter-spacing: 2.5px;
+      letter-spacing: 2px;
       color: var(--p-hi);
       text-shadow: 0 0 10px var(--p);
       white-space: nowrap;
+      flex-shrink: 0;
     }
-    .crt-fill { flex: 1; }
-    .crt-date { font-size: 10px; color: var(--p-dim); letter-spacing: 1px; white-space: nowrap; }
-
+    .crt-title .full { display: inline; }
+    .crt-title .short { display: none; }
+    .crt-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .crt-date {
+      font-size: 10px;
+      color: var(--p-dim);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
     #conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--p-dim); flex-shrink: 0; }
     #conn-dot.live  { background: var(--p);   box-shadow: 0 0 7px var(--p); }
     #conn-dot.error { background: var(--red); box-shadow: 0 0 7px var(--red); }
     #conn-label { font-size: 10px; color: var(--p-dim); letter-spacing: 1px; white-space: nowrap; }
 
-    #trigger-btn {
+    .hdr-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .crt-btn {
       background: transparent;
       border: 1px solid var(--p-dim);
       color: var(--p-dim);
-      padding: 2px 9px;
+      padding: 6px 10px;
       font-family: inherit;
       font-size: 10px;
-      letter-spacing: 1.5px;
+      letter-spacing: 1px;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
-    #trigger-btn:hover { border-color: var(--p); color: var(--p); text-shadow: 0 0 6px var(--p); }
-    #trigger-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .crt-btn:hover, .crt-btn:focus-visible {
+      border-color: var(--p); color: var(--p); text-shadow: 0 0 6px var(--p); outline: none;
+    }
+    .crt-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
     /* ── Top panel ── */
     .top-panel {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 16px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
       border: 1px solid var(--bdr);
-      padding: 14px;
+      padding: 12px;
       margin-bottom: 10px;
-    }
-    @media (max-width: 460px) {
-      .top-panel { grid-template-columns: 1fr; }
+      min-width: 0;
+      align-items: center;
     }
 
-    .status-terminal { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+    .status-terminal {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      justify-content: center;
+      min-width: 0;
+    }
 
-    .t-line { display: flex; align-items: baseline; gap: 0; }
-    .t-key  { color: var(--p-dim); letter-spacing: 1px; min-width: 64px; font-size: 11px; }
-    .t-sep  { color: var(--p-dark); margin: 0 7px; }
-    .t-val  { color: var(--p); font-size: 12px; }
+    .t-line {
+      display: grid;
+      grid-template-columns: 56px 14px minmax(0, 1fr);
+      align-items: baseline;
+      gap: 0;
+      min-width: 0;
+    }
+    .t-key  { color: var(--p-dim); letter-spacing: 1px; font-size: 11px; }
+    .t-sep  { color: var(--p-dark); text-align: center; }
+    .t-val  {
+      color: var(--p);
+      font-size: 12px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .t-val.dim        { color: var(--p-dim); }
     .t-val.idle       { color: var(--p-dim); }
     .t-val.processing { color: var(--yellow); text-shadow: 0 0 6px var(--yellow); }
@@ -128,7 +201,15 @@ function createLivePage() {
     .t-val.alarmed    { color: var(--red);    text-shadow: 0 0 7px var(--red); }
     .t-val.worried    { color: var(--orange); }
     .t-val.ok         { color: var(--p); text-shadow: 0 0 6px var(--p); }
-    .t-log { max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--p-dim); font-size: 10px; }
+    .t-log {
+      display: block;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--p-dim);
+      font-size: 10px;
+    }
 
     /* ── Mini bot ── */
     .mini-bot-area {
@@ -136,10 +217,11 @@ function createLivePage() {
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
     }
 
-    #tama-wrap { position: relative; width: 132px; height: 138px; }
-    #tama-svg  { width: 132px; height: 138px; transition: filter 0.6s ease; }
+    #tama-wrap { position: relative; width: 120px; height: 126px; max-width: 100%; }
+    #tama-svg  { width: 100%; height: 100%; display: block; transition: filter 0.6s ease; }
 
     .expr-happy    #tama-svg { filter: drop-shadow(0 0 16px #22c55e66); }
     .expr-thinking #tama-svg { filter: drop-shadow(0 0 16px #eab30866); }
@@ -172,7 +254,16 @@ function createLivePage() {
     @keyframes cursor-blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
     .cursor { font-size: 11px; color: var(--p); animation: cursor-blink 1s step-end infinite; line-height: 1; }
 
-    #tama-msg { font-size: 9px; color: var(--p-dim); margin-top: 3px; letter-spacing: 0.5px; text-align: center; max-width: 130px; }
+    #tama-msg {
+      font-size: 9px;
+      color: var(--p-dim);
+      margin-top: 3px;
+      letter-spacing: 0.5px;
+      text-align: center;
+      max-width: 120px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
 
     /* ── Bot animations ── */
     @keyframes bob        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
@@ -226,49 +317,185 @@ function createLivePage() {
     .expr-excited  .sparkles      { display:block; }
 
     /* ── CRT Sections ── */
-    .crt-section { border: 1px solid var(--bdr); padding: 12px; margin-bottom: 10px; }
+    .crt-section {
+      border: 1px solid var(--bdr);
+      padding: 12px;
+      margin-bottom: 10px;
+      min-width: 0;
+      overflow: hidden;
+    }
 
     .sec-hdr {
       display: flex;
       align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
       font-size: 10px;
       letter-spacing: 2px;
       color: var(--p-hi);
       text-shadow: 0 0 6px var(--p);
       margin-bottom: 10px;
+      min-width: 0;
     }
-    .sec-hdr::after { content:''; flex:1; height:1px; background:var(--bdr); margin-left:8px; }
+    .sec-hdr-title { flex: 0 0 auto; white-space: nowrap; }
+    .sec-hdr-line {
+      flex: 1 1 40px;
+      height: 1px;
+      background: var(--bdr);
+      min-width: 16px;
+    }
 
     /* Nudges */
-    .nudge { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid var(--p-dark); font-size:12px; }
-    .nudge:last-child { border-bottom:none; }
-    .npri { font-size:10px; letter-spacing:1px; flex-shrink:0; padding-top:1px; font-weight:bold; }
-    .npri.high   { color:var(--red);    text-shadow:0 0 6px var(--red); }
-    .npri.medium { color:var(--orange); }
-    .npri.low    { color:var(--p); }
-    .ntext { flex:1; }
-    .ack-btn { background:transparent; border:1px solid var(--p-dim); color:var(--p-dim); padding:2px 7px; font-family:inherit; font-size:9px; letter-spacing:1px; cursor:pointer; flex-shrink:0; }
-    .ack-btn:hover { border-color:var(--p); color:var(--p); }
+    #nudges-list { min-width: 0; }
+    .nudge {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--p-dark);
+      font-size: 12px;
+      min-width: 0;
+    }
+    .nudge:last-child { border-bottom: none; }
+    .npri {
+      font-size: 10px;
+      letter-spacing: 1px;
+      flex-shrink: 0;
+      padding-top: 2px;
+      font-weight: bold;
+    }
+    .npri.high   { color: var(--red); text-shadow: 0 0 6px var(--red); }
+    .npri.medium { color: var(--orange); }
+    .npri.low    { color: var(--p); }
+    .ntext {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .ack-btn {
+      background: transparent;
+      border: 1px solid var(--p-dim);
+      color: var(--p-dim);
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      flex-shrink: 0;
+      min-height: 32px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .ack-btn:hover, .ack-btn:focus-visible {
+      border-color: var(--p); color: var(--p); outline: none;
+    }
 
     /* Daily summary */
-    #daily-summary { font-size:12px; line-height:1.75; }
+    #daily-summary {
+      font-size: 12px;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
+    }
 
     /* TODOs */
-    .todo-cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-    @media (max-width:460px) { .todo-cols { grid-template-columns:1fr; } }
-    .tcol-title { font-size:9px; letter-spacing:2px; color:var(--p-dim); margin-bottom:6px; border-bottom:1px solid var(--bdr); padding-bottom:4px; }
-    .todo-item { display:flex; align-items:flex-start; gap:5px; padding:5px 0; border-bottom:1px solid var(--p-dark); font-size:11px; }
-    .todo-item:last-child { border-bottom:none; }
-    .tchk { flex-shrink:0; font-size:11px; }
-    .tchk.high   { color:var(--red); }
-    .tchk.medium { color:var(--yellow); }
-    .tchk.low    { color:var(--p); }
-    .tchk.done   { color:var(--p-dim); }
-    .tchk.prog   { color:var(--orange); }
-    .tbody { flex:1; }
-    .tsugg { font-size:9px; color:var(--p-dim); margin-top:2px; }
-    .tsrc  { font-size:9px; color:var(--p-dark); margin-top:1px; }
-    .empty-col { font-size:11px; color:var(--p-dark); padding:4px 0; }
+    .todo-cols {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .todo-col { min-width: 0; overflow: hidden; }
+    .tcol-title {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--p-dim);
+      margin-bottom: 6px;
+      border-bottom: 1px solid var(--bdr);
+      padding-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--p-dark);
+      font-size: 11px;
+      min-width: 0;
+    }
+    .todo-item:last-child { border-bottom: none; }
+    .tchk-click {
+      flex-shrink: 0;
+      cursor: pointer;
+      padding: 2px 0;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .tchk { flex-shrink: 0; font-size: 11px; }
+    .tchk.high   { color: var(--red); }
+    .tchk.medium { color: var(--yellow); }
+    .tchk.low    { color: var(--p); }
+    .tchk.done   { color: var(--p-dim); }
+    .tchk.prog   { color: var(--orange); }
+    .tbody {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .tsugg { font-size: 9px; color: var(--p-dim); margin-top: 2px; overflow-wrap: anywhere; }
+    .tsrc  { font-size: 9px; color: var(--p-dark); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty-col { font-size: 11px; color: var(--p-dark); padding: 4px 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 560px) {
+      .screen { padding: max(10px, var(--safe-t)) 10px max(14px, var(--safe-b)); }
+      .crt-title { letter-spacing: 1px; font-size: 10px; }
+      .crt-title .full { display: none; }
+      .crt-title .short { display: inline; }
+      .crt-date .date-full { display: none; }
+      .top-panel {
+        grid-template-columns: 1fr;
+        justify-items: stretch;
+      }
+      .mini-bot-area {
+        order: -1;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--p-dark);
+      }
+      #tama-wrap { width: 100px; height: 105px; }
+      .todo-cols { grid-template-columns: 1fr; gap: 14px; }
+      .t-line { grid-template-columns: 52px 12px minmax(0, 1fr); }
+      .nudge { flex-wrap: wrap; }
+      .ntext { flex: 1 1 calc(100% - 80px); }
+      .ack-btn { margin-left: auto; }
+    }
+
+    @media (min-width: 561px) and (max-width: 720px) {
+      .todo-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .todo-col:last-child { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 360px) {
+      .conn #conn-label { display: none; }
+      .crt-btn { padding: 6px 8px; letter-spacing: 0.5px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .screen { animation: none; }
+      #tama-body-group,
+      .expr-alarmed #tama-body-group,
+      .expr-thinking #tama-body-group,
+      .eye-blink,
+      .star-spin-cw,
+      .star-spin-ccw,
+      .cursor { animation: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -276,13 +503,21 @@ function createLivePage() {
 
   <!-- Header -->
   <div class="crt-header">
-    <span class="crt-title">▓ ALFRED OS v1.0 ▓</span>
-    <span class="crt-fill"></span>
-    <span class="crt-date" id="crt-date"></span>
-    <div id="conn-dot"></div>
-    <span id="conn-label">OFFLINE</span>
-    <a href="/demo" class="crt-link-btn" style="text-decoration:none;display:inline-flex;align-items:center;border:1px solid var(--p-dim);color:var(--p-dim);padding:2px 8px;font-size:9px;letter-spacing:1px;margin-right:6px;">DEMO</a>
-    <button id="trigger-btn" onclick="triggerPoll()">POLL</button>
+    <span class="crt-title">
+      <span class="full">▓ ALFRED OS v1.0 ▓</span>
+      <span class="short">▓ ALFRED ▓</span>
+    </span>
+    <div class="crt-meta">
+      <span class="crt-date" id="crt-date"></span>
+      <span class="conn">
+        <span id="conn-dot"></span>
+        <span id="conn-label">OFFLINE</span>
+      </span>
+      <span class="hdr-actions">
+        <a href="/demo" class="crt-btn">DEMO</a>
+        <button type="button" id="trigger-btn" class="crt-btn" onclick="triggerPoll()">POLL</button>
+      </span>
+    </div>
   </div>
 
   <!-- Top panel: status + mini bot -->
@@ -502,35 +737,38 @@ function createLivePage() {
 
   <!-- Nudges -->
   <div class="crt-section">
-    <div class="sec-hdr">▸ NUDGES
-      <span style="float:right;font-weight:400;letter-spacing:0;">
-        <button class="ack-btn" onclick="fabricateDemo('buzzer')" title="Fabricate demo nudge">+ DEMO</button>
-        <button class="ack-btn" onclick="fabricateDemo('critical')" title="Critical pack">CRIT</button>
-        <button class="ack-btn" onclick="clearDemoNudges()" title="Clear demo nudges">CLR</button>
-      </span>
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">▸ NUDGES</span>
+      <span class="sec-hdr-line" aria-hidden="true"></span>
     </div>
     <div id="nudges-list"><div class="empty-col">// NO ACTIVE NUDGES</div></div>
   </div>
 
   <!-- Daily brief -->
   <div class="crt-section">
-    <div class="sec-hdr">▸ DAILY BRIEF</div>
-    <div id="daily-summary" style="color:var(--p-dim);">// NOT YET GENERATED</div>
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">▸ DAILY BRIEF</span>
+      <span class="sec-hdr-line" aria-hidden="true"></span>
+    </div>
+    <div id="daily-summary" class="t-val dim">// NOT YET GENERATED</div>
   </div>
 
   <!-- Tasks -->
   <div class="crt-section">
-    <div class="sec-hdr">▸ TASKS</div>
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">▸ TASKS</span>
+      <span class="sec-hdr-line" aria-hidden="true"></span>
+    </div>
     <div class="todo-cols">
-      <div>
+      <div class="todo-col">
         <div class="tcol-title">[ TODO ]</div>
         <div id="col-todo"></div>
       </div>
-      <div>
+      <div class="todo-col">
         <div class="tcol-title">[ IN PROG ]</div>
         <div id="col-inprogress"></div>
       </div>
-      <div>
+      <div class="todo-col">
         <div class="tcol-title">[ DONE ]</div>
         <div id="col-done"></div>
       </div>
@@ -547,9 +785,11 @@ function createLivePage() {
   // ── Clock ────────────────────────────────────────────────────
   function updateClock() {
     const n = new Date();
-    const d = n.toISOString().slice(0,10).replace(/-/g,".");
-    const t = n.toTimeString().slice(0,8);
-    document.getElementById("crt-date").textContent = d + " " + t;
+    const d = n.toISOString().slice(0, 10).replace(/-/g, ".");
+    const t = n.toTimeString().slice(0, 8);
+    const narrow = window.matchMedia("(max-width: 560px)").matches;
+    // Mobile: time-first; desktop: full stamp
+    document.getElementById("crt-date").textContent = narrow ? t + "  " + d.slice(5) : d + " " + t;
   }
   updateClock();
   setInterval(updateClock, 1000);
@@ -628,16 +868,18 @@ function createLivePage() {
     // Daily summary
     const sumEl = document.getElementById("daily-summary");
     sumEl.textContent = state.dailySummary || "// NOT YET GENERATED";
-    sumEl.style.color  = state.dailySummary ? "var(--p)" : "var(--p-dim)";
+    sumEl.className = state.dailySummary ? "" : "t-val dim";
+    sumEl.style.color = state.dailySummary ? "var(--p)" : "var(--p-dim)";
 
     // Nudges list
     document.getElementById("nudges-list").innerHTML = nudges.length
       ? nudges.map(n => {
-          const sym = n.priority === "high" ? "[!!!]" : n.priority === "medium" ? "[!]" : "[·]";
+          const pri = (n.priority || "medium").toLowerCase();
+          const sym = pri === "high" || pri === "critical" ? "[!!!]" : pri === "medium" ? "[!]" : "[·]";
           return \`<div class="nudge">
-            <span class="npri \${esc(n.priority)}">\${sym}</span>
+            <span class="npri \${esc(pri)}">\${sym}</span>
             <span class="ntext">\${esc(n.text)}</span>
-            <button class="ack-btn" onclick="ackNudge('\${esc(n.id)}')">ACK</button>
+            <button type="button" class="ack-btn" onclick="ackNudge('\${esc(n.id)}')">ACK</button>
           </div>\`;
         }).join("")
       : '<div class="empty-col">// NO ACTIVE NUDGES</div>';
@@ -684,28 +926,6 @@ function createLivePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nudgeId: id }),
-      });
-      await fetchState();
-    } catch(e) {}
-  }
-
-  async function fabricateDemo(scenario) {
-    try {
-      await fetch("/api/alfred/nudge/fabricate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario: scenario || "buzzer", replace: true }),
-      });
-      await fetchState();
-    } catch(e) {}
-  }
-
-  async function clearDemoNudges() {
-    try {
-      await fetch("/api/alfred/nudge/clear-demo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
       });
       await fetchState();
     } catch(e) {}

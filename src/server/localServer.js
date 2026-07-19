@@ -4,6 +4,7 @@ const { createLivePage } = require("./livePage");
 const { createDemoPage } = require("./demoPage");
 const { resolveFabricateRequest, listScenarios } = require("../demo/nudgeFabricator");
 const { resolveStagePack, buildStageApplication, listStagePacks } = require("../demo/demoStage");
+const { idleGreetingDisplay } = require("./idleGreeting");
 
 function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
   let server = null;
@@ -96,7 +97,8 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
       const isInMeeting = state.nowState?.mode === "meeting";
 
       let led = "green";
-      let display = "Finalizing Alfred";
+      // Idle fallback: "Good Morning/Day/Evening - <random minified greeting>"
+      let display = idleGreetingDisplay();
       if (isProcessing) { led = "red"; display = "Processing..."; }
       else if (activeNudge) { led = "red"; display = String(activeNudge.text || "").slice(0, 20); }
       else if (isInMeeting) { led = "blue"; display = (state.nowState?.context || "In meeting").slice(0, 20); }

@@ -24,6 +24,16 @@ Alfred exposes `GET http://<ALFRED_IP>:3737/api/state` returning:
 }
 ```
 
+Idle `display` (no nudge / not processing / not meeting) is a rotating greeting:
+
+```txt
+Good Morning - hey
+Good Day - ship it
+Good Evening - rest
+```
+
+Sticky for ~5 minutes so rapid polls do not flicker.
+
 When `nudgeId` is non-null (and usually `led` is red), a physical ACK button should POST:
 
 ```

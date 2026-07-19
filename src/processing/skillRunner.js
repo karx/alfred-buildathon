@@ -118,8 +118,8 @@ function mergeTodos(existing, incoming) {
 
 // ── LLM hops (each focused, each independently failable) ──────────
 
-// Hop 1 — per item: extract concrete actions
-async function hopExtract(item) {
+// Hop 1 — per item: extract concrete actions AND identify existing todos that this item resolves
+async function hopExtract(item, openTodos = []) {
   const prompt = `Extract actionable todos from this single inbox item. Be specific and concrete.
 
 RULES:
@@ -127,6 +127,12 @@ RULES:
 - Each must be a single concrete task the user can do RIGHT NOW (a verb + object, ≤80 chars).
 - NO meta-tasks: do not output "Review X", "Determine if Y", "Plan Z", "If W then...", "Understand...". If the only useful action would be a meta-task, return 0 actions.
 - Only extract tasks explicitly mentioned in the content. Do not infer follow-ups, tests, or hypotheticals.
+
+CLOSING EXISTING TODOS:
+The list below shows the user's currently OPEN todos (status=todo or in_progress). If this inbox item EXPLICITLY states or clearly confirms that one of them is now finished, resolved, sent, shipped, completed, or no longer needed, include its exact ID in "closes". Be conservative — only close on direct evidence (the meeting said "we sent the deck", the note says "fixed", etc.). Do NOT close based on inference, relatedness, or partial overlap. If unsure, return an empty closes array.
+
+OPEN TODOS (id | text | status):
+${openTodos.map((t) => `- ${t.id} | ${t.text} | ${t.status}`).join("\n") || "(none)"}
 
 SOURCE: ${item.source}
 TYPE: ${item.type}
@@ -137,14 +143,20 @@ Return ONLY valid JSON (no markdown fences):
   "actions": [
     { "text": "Specific actionable task", "priority": "high|medium|low", "dueDate": "YYYY-MM-DD or null" }
   ],
+  "closes": ["t_xxxxxxxx"],
   "summary": "One sentence describing what this item is about"
 }
 
-If nothing is actionable, return { "actions": [], "summary": "..." }.`;
+If nothing is actionable and nothing closes, return { "actions": [], "closes": [], "summary": "..." }.`;
 
   const text = await callLLM(prompt);
   const result = parseJson(text);
-  return result || { actions: [], summary: "" };
+  if (!result) return { actions: [], closes: [], summary: "" };
+  return {
+    actions: Array.isArray(result.actions) ? result.actions : [],
+    closes:  Array.isArray(result.closes)  ? result.closes  : [],
+    summary: result.summary || "",
+  };
 }
 
 // Hop 2 — after all items: reprioritize active todos
@@ -262,6 +274,7 @@ function createSkillRunner({ stateStore, outputHub }) {
       const processedItems = [];
 
       // ── Stage 1: per-item classify → extract → merge ─────────────
+      const closedIds = new Set();
       for (const item of items) {
         const kind = classifyItem(item);
 
@@ -273,12 +286,34 @@ function createSkillRunner({ stateStore, outputHub }) {
 
         await stateStore.patch({ processingLog: `[${provider}] Extracting from ${item.source} (${kind})...` });
 
-        let extracted = { actions: [], summary: "" };
+        // Open todos (non-done) are passed so the LLM can decide if this item closes any.
+        const openTodos = todos.filter((t) => t.status !== "done");
+
+        let extracted = { actions: [], closes: [], summary: "" };
         try {
-          extracted = await hopExtract(item);
-          console.log(`[SkillRunner] Extracted ${extracted.actions?.length || 0} action(s) from ${item.source}`);
+          extracted = await hopExtract(item, openTodos);
+          console.log(`[SkillRunner] Extracted ${extracted.actions?.length || 0} action(s), ${extracted.closes?.length || 0} close(s) from ${item.source}`);
         } catch (err) {
           console.error(`[SkillRunner] Extract failed (${item.source}):`, err.message);
+        }
+
+// Apply closes: only valid IDs, only items currently not already done.
+        if (extracted.closes?.length) {
+          const validIds = new Set(openTodos.map((t) => t.id));
+          const accepted = [];
+          for (const id of extracted.closes) {
+            if (typeof id !== "string" || !validIds.has(id) || closedIds.has(id)) continue;
+            closedIds.add(id);
+            accepted.push(id);
+            todos = todos.map((t) =>
+              t.id === id
+                ? { ...t, status: "done", closedAt: new Date().toISOString(), closedBy: item.source }
+                : t
+            );
+          }
+          if (accepted.length > 0) {
+            console.log(`[SkillRunner] Closing ${accepted.length} todo(s) [${accepted.join(", ")}] based on ${item.source}`);
+          }
         }
 
         if (extracted.actions?.length) {
