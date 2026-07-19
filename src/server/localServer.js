@@ -311,6 +311,139 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
       return;
     }
 
+    // Discord bot install callback (code-grant friendly).
+    // When "Requires OAuth2 Code Grant" is on, exchanging the code completes install.
+    // Gateway still uses DISCORD_BOT_TOKEN — we only exchange to finalize guild join.
+    if (
+      req.method === "GET" &&
+      (url.pathname === "/api/adapters/discord/oauth/callback" ||
+        url.pathname === "/api/adapters/discord/callback" ||
+        url.pathname === "/oauth/discord/callback")
+    ) {
+      const guildId = url.searchParams.get("guild_id") || "";
+      const err = url.searchParams.get("error");
+      const errDesc = url.searchParams.get("error_description") || "";
+      const code = url.searchParams.get("code") || "";
+      const port = Number(process.env.ALFRED_PORT) || settingsStore.get().port || 3737;
+      const redirectUri =
+        process.env.DISCORD_REDIRECT_URI ||
+        `http://localhost:${port}${url.pathname}`;
+      const clientId = process.env.DISCORD_CLIENT_ID || "";
+      const clientSecret =
+        process.env.DISCORD_CLIENT_SECRET || process.env.DISCORD_BOT_SECRET || "";
+
+      let exchangeOk = null;
+      let exchangeMsg = "";
+      if (!err && code && clientId && clientSecret) {
+        try {
+          const body = new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: redirectUri,
+          });
+          const tokenRes = await fetch("https://discord.com/api/v10/oauth2/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body,
+            signal: AbortSignal.timeout(10000),
+          });
+          const tokenJson = await tokenRes.json().catch(() => ({}));
+          exchangeOk = tokenRes.ok;
+          exchangeMsg = tokenRes.ok
+            ? "OAuth code exchanged (code-grant complete)."
+            : `Token exchange failed HTTP ${tokenRes.status}: ${tokenJson.error || tokenJson.message || JSON.stringify(tokenJson).slice(0, 120)}`;
+          console.log(
+            `[Discord OAuth] token exchange ${tokenRes.ok ? "ok" : "fail"} guild=${guildId || "?"} ${exchangeMsg}`
+          );
+        } catch (e) {
+          exchangeOk = false;
+          exchangeMsg = `Token exchange error: ${e.message}`;
+          console.error("[Discord OAuth]", exchangeMsg);
+        }
+      } else if (!err && code && !clientSecret) {
+        exchangeMsg =
+          "Got code but no DISCORD_CLIENT_SECRET / DISCORD_BOT_SECRET in .env — cannot complete code-grant exchange.";
+        console.warn(`[Discord OAuth] ${exchangeMsg}`);
+      }
+
+      const ok = !err;
+      const installed = Boolean(guildId);
+      const title = !ok
+        ? "Discord install failed"
+        : installed
+          ? "Discord bot installed"
+          : "OAuth completed — bot may not be in a server";
+      let body;
+      if (!ok) {
+        body = `<strong>${err}</strong>${errDesc ? `: ${errDesc}` : ""}`;
+      } else if (installed) {
+        body = `Bot authorized for guild <code>${guildId}</code>.
+          ${exchangeMsg ? `<br>${exchangeMsg}` : ""}
+          ${exchangeOk === false ? "<br><strong>Fix .env client secret / redirect match, then re-invite.</strong>" : ""}
+          <br>Close this tab and <strong>@mention the bot</strong> in that server.
+          <br>If the bot still doesn’t appear: Server Settings → Integrations, or re-run invite after exchange succeeds.`;
+      } else {
+        body = `Discord redirected back${code ? " with a code" : ""} but <strong>no <code>guild_id</code></strong>.
+          ${exchangeMsg ? `<br>${exchangeMsg}` : ""}
+          <ol>
+            <li>Use Alfred’s minimal invite: <code>GET /api/adapters/discord/invite</code> (scope=<strong>bot only</strong>)</li>
+            <li>Pick a <strong>server</strong> in the Discord dialog</li>
+            <li>Confirm under Server Settings → Integrations</li>
+          </ol>`;
+      }
+      console.log(
+        `[Discord OAuth callback] ok=${ok} guild_id=${guildId || "(none)"} code=${code ? "yes" : "no"} exchange=${exchangeOk} error=${err || ""}`
+      );
+      res.writeHead(ok ? 200 : 400, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.5}
+code{background:#f4f4f5;padding:.1rem .3rem;border-radius:4px}</style>
+</head><body><h1>${title}</h1><p>${body}</p>
+<p><a href="/api/adapters/discord/invite">Invite JSON</a> · <a href="/settings">Settings</a> · <a href="/demo">Demo</a></p></body></html>`);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/adapters/discord/invite") {
+      const clientId =
+        process.env.DISCORD_CLIENT_ID ||
+        process.env.DISCORD_APPLICATION_ID ||
+        "";
+      const port = Number(process.env.ALFRED_PORT) || settingsStore.get().port || 3737;
+      const redirectUri =
+        process.env.DISCORD_REDIRECT_URI ||
+        `http://localhost:${port}/api/adapters/discord/callback`;
+      const permissions = process.env.DISCORD_BOT_PERMISSIONS || "66560";
+      if (!clientId) {
+        sendJson(res, 400, {
+          ok: false,
+          message: "Set DISCORD_CLIENT_ID in .env (Application ID from Developer Portal)",
+          redirectUri,
+        });
+        return;
+      }
+      const inviteUrl =
+        `https://discord.com/api/oauth2/authorize` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&permissions=${encodeURIComponent(permissions)}` +
+        `&scope=bot` +
+        `&response_type=code` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      sendJson(res, 200, {
+        ok: true,
+        inviteUrl,
+        redirectUri,
+        instructions: [
+          "Developer Portal → OAuth2 → Redirects: add the redirectUri exactly",
+          "Open inviteUrl, pick a server, authorize",
+          "You land on Alfred's localhost callback — bot is installed",
+          "@mention the bot in Discord to feed Alfred inbox",
+        ],
+      });
+      return;
+    }
+
     // Output / actuator registry (composable fan-out)
     if (req.method === "GET" && url.pathname === "/api/actuators") {
       const list = actuatorManager ? actuatorManager.listActuators() : [];

@@ -70,6 +70,7 @@ function classifyItem(item) {
     return "vault-note";
   }
   if (item.source === "granola")    return "meeting";
+  if (item.source === "discord")    return "discord-message";
   if (item.source === "arduino-in") return "hardware-event";
   return "unknown";
 }
@@ -120,9 +121,14 @@ function mergeTodos(existing, incoming) {
 
 // Hop 1 — per item: extract concrete actions AND identify existing todos that this item resolves
 async function hopExtract(item, openTodos = []) {
+  const discordHint =
+    item.source === "discord"
+      ? "This is a Discord chat message that @mentioned Alfred. Treat `content` as the user's request; ignore mention markup. Prefer tasks the user asked to track or do.\n\n"
+      : "";
+
   const prompt = `Extract actionable todos from this single inbox item. Be specific and concrete.
 
-RULES:
+${discordHint}RULES:
 - Return at most 2 actions per item.
 - Each must be a single concrete task the user can do RIGHT NOW (a verb + object, ≤80 chars).
 - NO meta-tasks: do not output "Review X", "Determine if Y", "Plan Z", "If W then...", "Understand...". If the only useful action would be a meta-task, return 0 actions.

@@ -65,7 +65,63 @@ function createKnowledgeBase({ settingsStore }) {
     console.log(`[KB] Wrote meeting note: ${filename}`);
   }
 
-  return { writeMeetingNote };
+  /**
+   * Write-through for Discord bot mentions (inbox routing companion).
+   * @param {{ messageId?: string, author?: string, content?: string, channelId?: string, guildId?: string }} msg
+   */
+  async function writeDiscordNote(msg = {}) {
+    const config = getVaultConfig();
+    if (!config) return;
+
+    const inboxFolder = path.join(config.vaultPath, config.para?.inbox || "0 Inbox");
+    await fs.promises.mkdir(inboxFolder, { recursive: true });
+
+    const date = new Date().toISOString().slice(0, 10);
+    const author = msg.author || "unknown";
+    const snippet = safeFilename((msg.content || "mention").slice(0, 40)) || "mention";
+    const filename = `${date} Discord ${safeFilename(author)} ${snippet}.md`;
+    const filePath = path.join(inboxFolder, filename);
+
+    // Dedup by message id in any existing note is ideal; for simplicity skip if same path exists
+    if (fs.existsSync(filePath)) return;
+
+    // Also skip if a note for this messageId already exists (different snippet)
+    if (msg.messageId) {
+      try {
+        const files = await fs.promises.readdir(inboxFolder);
+        for (const f of files) {
+          if (!f.endsWith(".md") || !f.includes("Discord")) continue;
+          const body = await fs.promises.readFile(path.join(inboxFolder, f), "utf8");
+          if (body.includes(`Message ID: ${msg.messageId}`)) return;
+        }
+      } catch {
+        /* ignore scan errors */
+      }
+    }
+
+    const content = [
+      `# Discord · ${author}`,
+      "",
+      `- Date: ${date}`,
+      `- Source: Discord`,
+      `- Message ID: ${msg.messageId || ""}`,
+      `- Channel: ${msg.channelId || ""}`,
+      `- Guild: ${msg.guildId || ""}`,
+      `- Author: ${author}${msg.authorId ? ` (${msg.authorId})` : ""}`,
+      "",
+      "## Message",
+      msg.content || msg.rawContent || "(empty)",
+      "",
+      "## Actions",
+      "- [ ] ",
+      "",
+    ].join("\n");
+
+    await fs.promises.writeFile(filePath, content, "utf8");
+    console.log(`[KB] Wrote Discord note: ${filename}`);
+  }
+
+  return { writeMeetingNote, writeDiscordNote };
 }
 
 module.exports = { createKnowledgeBase };

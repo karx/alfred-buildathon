@@ -11,13 +11,14 @@
  * New actuators implement ActuatorContract and are listed below.
  */
 
+const { DiscordWebhookActuator } = require("./actuators/discordWebhookActuator");
+
 function createActuatorRegistry({ stateStore, settingsStore, outputHub } = {}) {
   const actuators = [
-    // e.g. new DiscordNotifyActuator({ settingsStore }),
-    // e.g. new WebhookActuator(),
+    new DiscordWebhookActuator(),
   ];
 
-  // silence unused until first actuator needs deps
+  // silence unused until an actuator needs constructor deps
   void stateStore;
   void settingsStore;
   void outputHub;

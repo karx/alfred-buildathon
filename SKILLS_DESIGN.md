@@ -2,10 +2,19 @@
 
 ## Overview
 
-Alfred's processing engine runs as a single LLM call today (`skillRunner.js → buildPrompt`). This spec extends it into a **named skill registry** where each skill is a discrete unit with its own schedule, trigger conditions, and opt-in toggle on the Settings page.
+## Evolution (why multi-hop beats v0.0.1)
+
+| Era | How it worked | Failure mode |
+|-----|----------------|--------------|
+| **Alfred v0.0.1** | One cheap-model call + **one large composed skill file** (extract + rank + nudge + summary in one megaprompt) | Vague meta-todos like *"Plan a team outing"* — sounds useful, not executable; model pads JSON to satisfy many goals at once |
+| **Alfred now (`skillRunner.js`)** | **Multi-hop pipeline**: deterministic `classifyItem` → `hopExtract` → meta-task filter → `hopReprioritize` → `hopNudges` → `hopSummary` → periodic `hopGarden` | Extract is narrow (≤2 concrete actions, explicit only); `/^plan /` and siblings are dropped; hops fail independently |
+
+Living example on the board: todo `t_a9db946c` (*Plan a team outing*) carries a `rationale` field documenting the singular-skill artifact. Under current rules that title is a **meta-task** and would not be merged from extract.
+
+This spec further extends multi-hop into a **named skill registry** where each skill is a discrete unit with its own schedule, trigger conditions, and opt-in toggle on the Settings page.
 
 Skills come from two sources:
-- Alfred's existing embedded skills (extracted from `buildPrompt`)
+- Alfred's existing embedded hops (extract / reprioritize / nudges / summary / garden in `skillRunner.js`)
 - ADHD Chief-of-Staff pack (`github.com/akashbhargava1992-sudo/adhd-chief-of-staff`)
 
 ---

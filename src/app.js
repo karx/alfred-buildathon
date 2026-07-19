@@ -11,7 +11,7 @@ const { createSkillRunner } = require("./processing/skillRunner");
 const { createKnowledgeBase } = require("./processing/knowledgeBase");
 const { resolveFabricateRequest } = require("./demo/nudgeFabricator");
 
-const INBOX_SOURCES = new Set(["granola", "vault"]);
+const INBOX_SOURCES = new Set(["granola", "vault", "discord"]);
 const POLL_INTERVAL_MS = Number(process.env.ALFRED_POLL_MS) || 60000;
 
 function isNudgeAckEvent(event) {
@@ -143,6 +143,13 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
         if (event.source === "granola" && event.type === "granola.meeting.new") {
           knowledgeBase.writeMeetingNote(event.payload).catch((e) =>
             console.error("[KB] Write error:", e.message)
+          );
+        }
+
+        // Discord mentions → vault inbox note (write-through)
+        if (event.source === "discord" && event.type === "discord.message.mention") {
+          knowledgeBase.writeDiscordNote(event.payload).catch((e) =>
+            console.error("[KB] Discord note error:", e.message)
           );
         }
 

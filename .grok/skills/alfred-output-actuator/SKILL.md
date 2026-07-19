@@ -26,7 +26,7 @@ Alfred outward — chat, webhooks, hardware push, email, dashboard widgets, etc.
 
 **Project root:** `alfred-buildathon`  
 **Sister skill (inputs):** `/alfred-input-stream`  
-**Docs:** [CURRENT_STATE.md](../../../CURRENT_STATE.md)
+**Docs:** [CURRENT_STATE.md](../../../CURRENT_STATE.md), [DISCORD_INTEGRATION.md](../../../DISCORD_INTEGRATION.md) (webhook out vs Gateway in)
 
 ---
 
@@ -418,6 +418,7 @@ visibility (optional but recommended).
 - [references/actuator-checklist.md](references/actuator-checklist.md)  
 - [references/actuator-skeleton.js](references/actuator-skeleton.js)  
 - [references/current-outputs.md](references/current-outputs.md)  
+- [DISCORD_INTEGRATION.md](../../../DISCORD_INTEGRATION.md) — Discord webhook out + dual in/out lessons
 
 ---
 

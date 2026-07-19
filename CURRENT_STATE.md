@@ -237,6 +237,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | Demo packs | `src/demo/demoStage.js`, `nudgeFabricator.js` |
 | Skills design (future) | `SKILLS_DESIGN.md` |
 | Hardware notes | `ARDUINO_FIRMWARE.md` |
+| **Discord bot learnings** | `DISCORD_INTEGRATION.md` — tokens, intents 4014, invite/code-grant, in vs out |
 | **Add a new input adapter** | Grok skill: `.grok/skills/alfred-input-stream/` → `/alfred-input-stream` |
 | **Add a new output / actuator** | Grok skill: `.grok/skills/alfred-output-actuator/` → `/alfred-output-actuator` |
 | Output bus | `src/outputs/outputHub.js` |
@@ -250,7 +251,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | **Vault** | Working — watch, PARA init, file-change events |
 | **Granola** | Working — OAuth, poll, XML meeting parse, KB write |
 | **Arduino In** | Working — HTTP ingest, templates, ack/fabricate wiring |
-| Discord | Scaffold only |
+| **Discord** | Working — Bot Gateway, @mention → inbox + vault note; separate from `discord-webhook` out |
 | Slack | Scaffold only |
 
 ### Outputs / actuators (status)
@@ -261,8 +262,9 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | `GET /api/state` | builtin pull | Working — hardware LED/display/buzzer |
 | Vault state sync | builtin push | Working — `Alfred/*.md` |
 | KB meeting notes | builtin write-through | Working — Granola → Inbox |
-| **Actuator registry** | composable fan-out | Scaffold — empty registry; add via `/alfred-output-actuator` |
-| Discord / Slack / webhooks out | registry actuators | Not yet — first citizens for the skill |
+| **Actuator registry** | composable fan-out | Working — `src/outputs/actuatorRegistry.js` |
+| **Discord Webhook** (`discord-webhook`) | registry actuator | Working — state-change rich embeds + `send-test`; config `webhookUrl` |
+| Slack / other webhooks out | registry actuators | Not yet — add via `/alfred-output-actuator` |
 
 ### Demo / operator
 
@@ -293,7 +295,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 ### Open / partial
 
 - [ ] Real vault FS verification as formal acceptance  
-- [ ] Discord bot vs interactions decision  
+- [x] Discord bot vs interactions decision — Gateway in + webhook out (`DISCORD_INTEGRATION.md`)
 - [ ] Physical Arduino end-to-end verification checklist  
 - [ ] Full named skills registry (`SKILLS_DESIGN.md`)  
 - [ ] Several first-acceptance UI checkboxes still open in `TODO.md` (functionality largely exists; formal sign-off pending)

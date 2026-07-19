@@ -7,6 +7,8 @@ For architecture, data flow, and a living implementation snapshot, see **[CURREN
 To add a new **input** adapter: **`/alfred-input-stream`** ([skill](.grok/skills/alfred-input-stream/)).  
 To add a new **output / actuator**: **`/alfred-output-actuator`** ([skill](.grok/skills/alfred-output-actuator/)).
 
+**Discord** (Bot Gateway in + webhook out): see **[DISCORD_INTEGRATION.md](DISCORD_INTEGRATION.md)** for tokens, intents, invite/code-grant gotchas, and debug checklist.
+
 ## First build slice
 
 Input adapters:

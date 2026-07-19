@@ -17,7 +17,7 @@
 - [x] Arduino In adapter scaffold
 - [x] Arduino HTTP templates: audio-in, mode-toggle, nudge-ack, sparring button, custom-template
 - [ ] Real Vault filesystem event verification with user's chosen vault
-- [ ] Discord bot/gateway vs interactions/webhook decision
+- [x] Discord bot/gateway vs interactions/webhook decision — **Gateway in + webhook out** (see `DISCORD_INTEGRATION.md`)
 - [ ] Arduino physical device verification over HTTP
 
 ## First acceptance criteria
@@ -33,6 +33,6 @@
 
 ## Questions to resolve
 
-1. Discord first: should Alfred use bot gateway, interactions/webhooks, or both?
+1. ~~Discord first: bot gateway vs interactions/webhooks?~~ **Decided:** Bot Gateway (mentions → inbox) + separate webhook actuator out. Details: `DISCORD_INTEGRATION.md`.
 2. Which real vault path should the user initialize as Alfred's PARA knowledge base?
 3. Which exact hardware payload fields should be required for audio-in, mode-toggle, and nudge-ack?

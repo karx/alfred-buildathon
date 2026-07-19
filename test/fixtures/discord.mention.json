@@ -1,0 +1,10 @@
+{
+  "eventType": "message-create",
+  "messageId": "fixture-msg-001",
+  "guildId": "demo-guild",
+  "channelId": "demo-channel",
+  "author": "fixture-user",
+  "authorId": "user-fixture-1",
+  "content": "Alfred, capture shipping the Discord adapter as a task",
+  "mentionedBot": true
+}

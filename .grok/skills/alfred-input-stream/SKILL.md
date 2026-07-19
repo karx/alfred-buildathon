@@ -20,7 +20,8 @@ LLM pipeline if needed, test, and verify.
 **Project root:** workspace of `alfred-buildathon` (typically `~/kaaro/src/alfred-buildathon`).
 
 **Related docs:** [CURRENT_STATE.md](../../../CURRENT_STATE.md), [README.md](../../../README.md),
-existing adapters under `src/inputs/adapters/`.
+existing adapters under `src/inputs/adapters/`.  
+**Discord (Gateway + invite/code-grant learnings):** [DISCORD_INTEGRATION.md](../../../DISCORD_INTEGRATION.md).
 
 ---
 
@@ -184,7 +185,8 @@ if (this.publish) await this.publish(event);
 | Filesystem watch | `vaultAdapter.js` |
 | OAuth + poll + tool calls | `granolaAdapter.js` |
 | HTTP ingest + secret | `arduinoInAdapter.js` |
-| Config-only scaffold | `discordAdapter.js`, `slackAdapter.js` |
+| Bot Gateway (mentions) | `discordAdapter.js` + `discordGateway.js` — see `DISCORD_INTEGRATION.md` |
+| Config-only scaffold | `slackAdapter.js` |
 
 Copy structure from the closest pattern; do not invent a parallel framework.
 
@@ -348,6 +350,7 @@ Transport?
 - [references/adapter-checklist.md](references/adapter-checklist.md) — printable checklist  
 - [references/interview-script.md](references/interview-script.md) — short Q list for chat  
 - [references/adapter-skeleton.js](references/adapter-skeleton.js) — copy-paste starter class  
+- [DISCORD_INTEGRATION.md](../../../DISCORD_INTEGRATION.md) — tokens, intents 4014, invite/code-grant, in vs out
 
 When scaffolding, prefer **reading a real adapter** over blind skeleton copy; use the skeleton only as a structure reminder.
 

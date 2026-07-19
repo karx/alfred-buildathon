@@ -449,6 +449,11 @@ function createLivePage() {
       word-break: break-word;
     }
     .tsugg { font-size: 9px; color: var(--p-dim); margin-top: 2px; overflow-wrap: anywhere; }
+    .trationale {
+      font-size: 9px; color: var(--p-dim); margin-top: 4px; overflow-wrap: anywhere;
+      white-space: pre-wrap; max-height: 7.5em; overflow-y: auto;
+      border-left: 2px solid var(--p-dim); padding-left: 6px; opacity: 0.9;
+    }
     .tsrc  { font-size: 9px; color: var(--p-dark); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .empty-col { font-size: 11px; color: var(--p-dark); padding: 4px 0; }
 
@@ -904,7 +909,9 @@ function createLivePage() {
             <div class="tbody">
               \${esc(t.text)}
               \${t.suggestion ? \`<div class="tsugg">&gt; \${esc(t.suggestion)}</div>\` : ""}
+              \${t.dueDate    ? \`<div class="tsrc">due:\${esc(t.dueDate)}</div>\`         : ""}
               \${t.source     ? \`<div class="tsrc">src:\${esc(t.source)}</div>\`        : ""}
+              \${t.rationale  ? \`<div class="trationale">\${esc(t.rationale)}</div>\`   : ""}
             </div>
           </div>\`).join("")
         : '<div class="empty-col">—</div>';
