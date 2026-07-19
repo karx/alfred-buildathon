@@ -3,6 +3,7 @@ const { createSettingsStore } = require("./settings/settingsStore");
 const { createStateStore } = require("./state/stateStore");
 const { createInputHub } = require("./inputs/inputHub");
 const { createOutputHub } = require("./outputs/outputHub");
+const { createActuatorManager } = require("./outputs/actuatorManager");
 const { createPipeline } = require("./pipeline/pipeline");
 const { createLocalServer } = require("./server/localServer");
 const { createAuditLog } = require("./verification/auditLog");
@@ -40,6 +41,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
 
   let inputHub;
   let outputHub;
+  let actuatorManager;
   let pipeline;
   let server;
   let skillRunner;
@@ -51,6 +53,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
 
       outputHub = createOutputHub({ recentEventLimit: settings.recentEventLimit });
       inputHub = createInputHub({ settingsStore, stateStore });
+      actuatorManager = createActuatorManager({ settingsStore, stateStore, outputHub });
       pipeline = createPipeline({ inputHub, outputHub });
       skillRunner = createSkillRunner({ stateStore, outputHub });
       const knowledgeBase = createKnowledgeBase({ settingsStore });
@@ -62,6 +65,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
         stateStore,
         skillRunner,
         adapterManager: inputHub.getAdapterManager(),
+        actuatorManager,
         outputHub,
         inputHitLog,
         auditLog: createAuditLog({ filePath: path.join(projectRoot, "config/verification.audit.jsonl") }),
@@ -151,6 +155,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
       const port = Number(process.env.ALFRED_PORT) || settings.port;
       await pipeline.start();
       await inputHub.start();
+      await actuatorManager.start();
       skillRunner.startPeriodic(POLL_INTERVAL_MS);
       await server.start(port);
 
@@ -159,6 +164,7 @@ function createAlfredApp({ projectRoot = path.join(__dirname, "..") } = {}) {
 
     async stop() {
       if (skillRunner) skillRunner.stopPeriodic();
+      if (actuatorManager) await actuatorManager.stop();
       if (server) await server.stop();
       if (inputHub) await inputHub.stop();
       if (pipeline) await pipeline.stop();

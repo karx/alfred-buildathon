@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   appName: "Finalizing Alfred",
   port: 3737,
   adapters: {},
+  actuators: {},
   recentEventLimit: 100,
 };
 
@@ -24,10 +25,12 @@ function createSettingsStore({ filePath = path.join(process.cwd(), "config/setti
       }
 
       const content = await fs.promises.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
       settings = {
         ...DEFAULT_SETTINGS,
-        ...JSON.parse(content),
-        adapters: JSON.parse(content).adapters || {},
+        ...parsed,
+        adapters: parsed.adapters || {},
+        actuators: parsed.actuators || {},
       };
       return settings;
     },
@@ -64,6 +67,25 @@ function createSettingsStore({ filePath = path.join(process.cwd(), "config/setti
         ...settings,
         adapters: nextAdapters,
       };
+      await persist();
+    },
+
+    async updateActuator(id, actuatorState) {
+      settings = {
+        ...settings,
+        actuators: {
+          ...settings.actuators,
+          [id]: actuatorState,
+        },
+      };
+      await persist();
+      return settings.actuators[id];
+    },
+
+    async removeActuator(id) {
+      const next = { ...settings.actuators };
+      delete next[id];
+      settings = { ...settings, actuators: next };
       await persist();
     },
   };

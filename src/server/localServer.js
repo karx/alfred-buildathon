@@ -6,7 +6,7 @@ const { resolveFabricateRequest, listScenarios } = require("../demo/nudgeFabrica
 const { resolveStagePack, buildStageApplication, listStagePacks } = require("../demo/demoStage");
 const { idleGreetingDisplay } = require("./idleGreeting");
 
-function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
+function createLocalServer({ settingsStore, adapterManager, actuatorManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
   let server = null;
   const sseClients = new Set();
 
@@ -308,6 +308,46 @@ function createLocalServer({ settingsStore, adapterManager, outputHub, auditLog,
 
     if (req.method === "GET" && url.pathname === "/api/adapters") {
       sendJson(res, 200, { ok: true, adapters: adapterManager.listAdapters() });
+      return;
+    }
+
+    // Output / actuator registry (composable fan-out)
+    if (req.method === "GET" && url.pathname === "/api/actuators") {
+      const list = actuatorManager ? actuatorManager.listActuators() : [];
+      sendJson(res, 200, {
+        ok: true,
+        actuators: list,
+        // Built-in projections that predate the registry
+        builtins: [
+          { id: "sse", label: "SSE /events", description: "Browser event stream from outputHub" },
+          { id: "hardware-state", label: "GET /api/state", description: "Hardware LED/display/buzzer projection" },
+          { id: "vault-sync", label: "Vault state sync", description: "Alfred/*.md mirror of todos/daily" },
+          { id: "kb-meeting", label: "Meeting notes", description: "Write-through Granola → 0 Inbox" },
+        ],
+      });
+      return;
+    }
+
+    const actuatorAction = url.pathname.match(/^\/api\/actuators\/([^/]+)\/(connect|test|disconnect)$/);
+    if (req.method === "POST" && actuatorAction && actuatorManager) {
+      const [, actuatorId, action] = actuatorAction;
+      const body = await readBody(req);
+      const config = body.config || {};
+      const result = action === "connect"
+        ? await actuatorManager.connect(actuatorId, config)
+        : action === "disconnect"
+          ? await actuatorManager.disconnect(actuatorId)
+          : await actuatorManager.test(actuatorId, config);
+      sendJson(res, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    const actuatorCustom = url.pathname.match(/^\/api\/actuators\/([^/]+)\/actions\/([^/]+)$/);
+    if (req.method === "POST" && actuatorCustom && actuatorManager) {
+      const [, actuatorId, actionId] = actuatorCustom;
+      const body = await readBody(req);
+      const result = await actuatorManager.runAction(actuatorId, actionId, body);
+      sendJson(res, result.ok ? 200 : (result.status || 400), result);
       return;
     }
 
