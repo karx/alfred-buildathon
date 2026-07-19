@@ -296,7 +296,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 
 - [ ] Real vault FS verification as formal acceptance  
 - [x] Discord bot vs interactions decision — Gateway in + webhook out (`DISCORD_INTEGRATION.md`)
-- [ ] Physical Arduino end-to-end verification checklist  
+- [x] Arduino desk-companion **automated** contract + sim e2e (`test/contract/*`, `test/inputs/arduinoSimE2e.test.js`); physical curl checklist in `ARDUINO_FIRMWARE.md` (run when hardware is on desk)
 - [ ] Full named skills registry (`SKILLS_DESIGN.md`)  
 - [ ] Several first-acceptance UI checkboxes still open in `TODO.md` (functionality largely exists; formal sign-off pending)
 

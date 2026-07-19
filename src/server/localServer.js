@@ -104,7 +104,8 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
       else if (isInMeeting) { led = "blue"; display = (state.nowState?.context || "In meeting").slice(0, 20); }
 
       const buzzer = nudges.length > 0;
-      if (buzzer && stateStore) stateStore.clearBuzzer().catch(() => {});
+      // Edge-clear pendingBuzzer on read so the next poll does not re-chirp (await so contract is stable).
+      if (buzzer && stateStore) await stateStore.clearBuzzer();
 
       sendJson(res, 200, {
         led,

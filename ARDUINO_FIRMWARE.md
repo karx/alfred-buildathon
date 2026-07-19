@@ -181,3 +181,86 @@ Body:
 3. Set `SSID` / `PASSWORD`
 4. Flash and open Serial Monitor — confirm WiFi connection
 5. Alfred must be running: `npm start` in `~/kaaro/src/alfred-buildathon`
+
+---
+
+## Physical verification checklist
+
+Automated coverage: `test/inputs/arduinoSimE2e.test.js` + `test/contract/stateApiContract.test.js`.
+Run the same cases against a live desk controller when hardware is on the desk.
+Assume Alfred is at `http://<ALFRED_IP>:3737` and Arduino In is connected with shared secret `dev-secret` (or your Settings value).
+
+```bash
+export ALFRED=http://127.0.0.1:3737
+export SECRET=dev-secret   # match Settings → Arduino In sharedSecret
+
+# Helper: project fields the firmware reads
+curl -s "$ALFRED/api/state" | jq '{led,display,buzzer,nudgeId,nudgeText,nudgeCount,processingStatus}'
+```
+
+### Cases (mirror of sim e2e)
+
+1. **audio-in** — ingest only; state stays idle green  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"audio-in","source":"desk-mic","transcript":"hello","confidence":0.9}'
+   curl -s "$ALFRED/api/state" | jq '{led,nudgeCount,processingStatus}'
+   # expect: led=green, nudgeCount=0, processingStatus=idle
+   ```
+
+2. **mode-toggle** — control-plane event; projection unchanged  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"mode-toggle","mode":"sparring","enabled":true}'
+   ```
+
+3. **nudge-fabricate** — LED red, display/nudgeText set, buzzer true; second poll still shows nudge  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"nudge-fabricate","scenario":"buzzer","replace":true}'
+   curl -s "$ALFRED/api/state" | jq '{led,display,buzzer,nudgeId,nudgeCount}'
+   # expect: led=red, buzzer=true, nudgeId set, display ≤20 chars
+   # firmware should chirp once on buzzer rising edge
+   ```
+
+4. **nudge-ack without nudgeId** — clears active display nudge  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"nudge-ack","response":"acknowledged"}'
+   curl -s "$ALFRED/api/state" | jq '{led,buzzer,nudgeId,nudgeCount}'
+   # expect: led=green, buzzer=false, nudgeId=null, nudgeCount=0
+   ```
+
+5. **nudge-ack with nudgeId** — acks explicit id (leave another nudge active if testing multi-nudge)  
+   ```bash
+   NUDGE_ID=$(curl -s "$ALFRED/api/state" | jq -r .nudgeId)
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d "{\"eventType\":\"nudge-ack\",\"nudgeId\":\"$NUDGE_ID\",\"response\":\"acknowledged\"}"
+   ```
+
+6. **button (sparring)** — ingest accepted; no hardware projection change  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"button","button":"sparring","state":"pressed"}'
+   ```
+
+7. **custom-template** — ingest accepted; idle state  
+   ```bash
+   curl -s -X POST "$ALFRED/api/adapters/arduino-in/ingest" \
+     -H "Content-Type: application/json" -H "x-alfred-secret: $SECRET" \
+     -d '{"eventType":"custom-template","name":"example","value":true}'
+   ```
+
+### Physical-only checks
+
+- [ ] OLED shows `display` text (≤20) matching `/api/state`
+- [ ] LED color matches `led` (green idle / red nudge / blue meeting)
+- [ ] Buzzer chirps only on rising edge of `buzzer` (new nudge), not every poll
+- [ ] Physical ACK button POSTs `nudge-ack` (or `button` + `nudge-ack`) and clears display
+- [ ] Shared secret mismatch returns 401 (firmware should log / ignore)

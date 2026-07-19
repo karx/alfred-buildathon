@@ -49,22 +49,22 @@ Validates the taste hypothesis (`.commandcode/taste/taste.md`, confidence 0.75) 
 
 ## Item 2 — Desk-companion endpoint contract + simulated Arduino e2e
 
-**Status:** `todo` · **Depends on:** — (do before Items 3–4 refactor `app.js`/`skillRunner.js`) · **Size:** M
+**Status:** `done` · **Depends on:** — (do before Items 3–4 refactor `app.js`/`skillRunner.js`) · **Size:** M · **Completed:** 2026-07-20
 
 Freezes the surfaces the desk companion depends on, so the registry/scheduler refactor cannot silently break hardware. Simulation-first per operator decision; the sim pass doubles as the future physical-verification checklist (`TODO.md` open item).
 
 ### Red
-- [ ] `test/contract/stateApiContract.test.js` — failing tests locking `GET /api/state` projection fields exactly: `led`, `display`, `buzzer`, `nudgeId`, `nudgeText`, `nudgeCount`, `processingStatus` (source: `src/server/localServer.js` state projection; documented CURRENT_STATE.md §5).
-- [ ] `test/contract/sseContract.test.js` — failing tests locking SSE event names: `alfred.state.updated`, `alfred.input.hit`, `pipeline.*` (source: `src/outputs/outputHub.js`, `src/state/stateStore.js` wiring in `src/app.js`).
-- [ ] `test/inputs/arduinoSimE2e.test.js` — failing end-to-end simulation, one case per ingest template (`audio-in`, `mode-toggle`, `nudge-ack` with and without `nudgeId`, `button`, `nudge-fabricate`, `custom-template`): POST `/api/adapters/arduino-in/ingest` → assert resulting `/api/state` projection, including the `pendingBuzzer` edge-trigger firing on new nudge (`src/state/stateStore.js:142`) and clearing after read (`stateStore.js:255-256`).
+- [x] `test/contract/stateApiContract.test.js` — failing tests locking `GET /api/state` projection fields exactly: `led`, `display`, `buzzer`, `nudgeId`, `nudgeText`, `nudgeCount`, `processingStatus` (source: `src/server/localServer.js` state projection; documented CURRENT_STATE.md §5).
+- [x] `test/contract/sseContract.test.js` — failing tests locking SSE event names: `alfred.state.updated`, `alfred.input.hit`, `pipeline.*` (source: `src/outputs/outputHub.js`, `src/state/stateStore.js` wiring in `src/app.js`).
+- [x] `test/inputs/arduinoSimE2e.test.js` — failing end-to-end simulation, one case per ingest template (`audio-in`, `mode-toggle`, `nudge-ack` with and without `nudgeId`, `button`, `nudge-fabricate`, `custom-template`): POST `/api/adapters/arduino-in/ingest` → assert resulting `/api/state` projection, including the `pendingBuzzer` edge-trigger firing on new nudge (`src/state/stateStore.js:142`) and clearing after read (`stateStore.js:255-256`).
 
 ### Green
-- [ ] Implement only what the tests reveal is missing (expected: mostly test-harness plumbing — the behavior exists; the contract does not).
+- [x] Implement only what the tests reveal is missing (expected: mostly test-harness plumbing — the behavior exists; the contract does not). Await `clearBuzzer()` on `/api/state` read so the edge-clear is deterministic.
 
 ### Refactor / close-out
-- [ ] Full `npm test` green.
-- [ ] Add a **Physical verification checklist** section to `ARDUINO_FIRMWARE.md` that replays the sim cases via `curl` against real hardware (fulfills TODO.md "Arduino physical device verification" as a ready-to-run doc; execution deferred until hardware is on the desk).
-- [ ] Tick CURRENT_STATE.md §7 note re: acceptance criteria covered by automated contract.
+- [x] Full `npm test` green.
+- [x] Add a **Physical verification checklist** section to `ARDUINO_FIRMWARE.md` that replays the sim cases via `curl` against real hardware (fulfills TODO.md "Arduino physical device verification" as a ready-to-run doc; execution deferred until hardware is on the desk).
+- [x] Tick CURRENT_STATE.md §7 note re: acceptance criteria covered by automated contract.
 
 ---
 
@@ -154,3 +154,4 @@ CI workflow (GitHub Actions `npm ci && npm test` — repo has remote `github.com
 |------|------|-------|
 | 2026-07-19 | — | Plan created. Baseline: 61/61 tests green. |
 | 2026-07-20 | 1 | `starts[]` shipped. Normalizer + applyStarts pure helpers; hopExtract prompt; suite 66/66 green. |
+| 2026-07-20 | 2 | Desk-companion contract + Arduino sim e2e frozen; physical checklist in ARDUINO_FIRMWARE.md; await clearBuzzer on /api/state. |
