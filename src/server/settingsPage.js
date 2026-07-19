@@ -590,8 +590,11 @@ function makeAdapterBody(a) {
   if (a.id === 'granola') {
     if (a._pending) {
       html += '<div class="oauth-notice"><strong>Awaiting browser authorization</strong>' +
-        'A browser window should have opened. Complete the Granola OAuth flow, then click ' +
-        '"Refresh" below to confirm connection.</div>';
+        'Complete the Granola OAuth flow, then click "Refresh" below to confirm connection.' +
+        (a._authUrl
+          ? '<div style="margin-top:8px"><a href="' + esc(a._authUrl) + '" target="_blank" rel="noopener" style="color:var(--indigo)">Open Granola authorization →</a></div>'
+          : '') +
+        '</div>';
     } else if (!a.connected) {
       html += '<div class="oauth-notice"><strong>Browser OAuth required</strong>' +
         'Clicking Connect will open a browser tab for Granola authorization. ' +
@@ -705,7 +708,7 @@ async function adapterTest(id) {
 async function adapterConnect(id) {
   var st = document.getElementById('status-' + id);
   if (id === 'granola') {
-    show(st, 'Opening browser for Granola OAuth...', 'info');
+    show(st, 'Preparing Granola OAuth (this can take a few seconds)...', 'info');
   } else {
     show(st, 'Connecting...', null);
   }
@@ -713,9 +716,18 @@ async function adapterConnect(id) {
     var cfg = getConfig(id);
     var r = await post('/api/adapters/' + id + '/connect', { config: cfg });
     if (r.pending) {
-      show(st, r.message, 'info');
+      var msg = r.message || 'Authorization pending';
+      if (r.authUrl) {
+        msg += ' — if no tab opened: ' + r.authUrl;
+        // Best-effort client open (may be popup-blocked after await; link is the fallback)
+        try { window.open(r.authUrl, '_blank', 'noopener'); } catch (e) {}
+      }
+      show(st, msg, 'info');
       var a = adapterById(id);
-      if (a) a._pending = true;
+      if (a) {
+        a._pending = true;
+        a._authUrl = r.authUrl || null;
+      }
       refreshCard(id);
     } else {
       show(st, r, r.ok ? 'ok' : 'err');

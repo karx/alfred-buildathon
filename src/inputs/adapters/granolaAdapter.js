@@ -1,7 +1,7 @@
 const https = require("https");
 const { AdapterContract } = require("../adapterContract");
 const { createNormalizedEvent } = require("../../core/eventContract");
-const { runOAuthFlow } = require("./granolaOAuth");
+const { prepareOAuthFlow, openBrowser } = require("./granolaOAuth");
 
 const MCP_ENDPOINT = "https://mcp.granola.ai/mcp";
 const MCP_VERSION = "2024-11-05";
@@ -425,11 +425,39 @@ class GranolaAdapter extends AdapterContract {
 
     const pollIntervalMs = config.pollIntervalMs || 60000;
     this.config = { pollIntervalMs, timeRange: "last_30_days", ...config };
-    console.log("[Granola] Starting OAuth flow in background...");
 
-    runOAuthFlow()
+    // Avoid concurrent OAuth (adapter restore can race with a second connect).
+    if (this._oauthInFlight) {
+      return {
+        ok: true,
+        pending: true,
+        authUrl: this._pendingAuthUrl || null,
+        message: "Granola OAuth already in progress — finish the browser flow or open the auth link.",
+      };
+    }
+
+    console.log("[Granola] Preparing OAuth (discovery + client registration)...");
+    this._oauthInFlight = true;
+
+    let flow;
+    try {
+      // Await prep so we have a real authUrl before telling the UI a browser opened.
+      flow = await prepareOAuthFlow();
+    } catch (err) {
+      this._oauthInFlight = false;
+      console.error("[Granola] OAuth prepare failed:", err.message);
+      return { ok: false, message: `Granola OAuth failed: ${err.message}` };
+    }
+
+    this._pendingAuthUrl = flow.authUrl;
+    console.log(`[Granola] Opening browser: ${flow.authUrl}`);
+    openBrowser(flow.authUrl);
+
+    flow
+      .complete()
       .then(async (oauthToken) => {
         this.config = { ...this.config, oauthToken };
+        this._pendingAuthUrl = null;
         console.log("[Granola] OAuth complete, saving token...");
 
         if (this.settingsStore) {
@@ -451,14 +479,19 @@ class GranolaAdapter extends AdapterContract {
       })
       .catch((err) => {
         console.error("[Granola] OAuth failed:", err.message);
+      })
+      .finally(() => {
+        this._oauthInFlight = false;
+        this._pendingAuthUrl = null;
       });
 
     return {
       ok: true,
       pending: true,
+      authUrl: flow.authUrl,
       message:
-        "Browser opened for Granola OAuth. Authorize in the browser — Alfred saves the token automatically. " +
-        "MCP personal scope includes notes shared with you. Refresh adapters after authorization to confirm.",
+        "Browser should open for Granola OAuth. If it does not, use the auth link below. " +
+        "Alfred saves the token automatically after you authorize. Refresh adapters to confirm.",
     };
   }
 

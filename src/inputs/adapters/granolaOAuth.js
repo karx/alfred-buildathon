@@ -1,7 +1,7 @@
 const https = require("https");
 const http = require("http");
 const crypto = require("crypto");
-const { exec } = require("child_process");
+const { spawn } = require("child_process");
 const { URL, URLSearchParams } = require("url");
 
 const CALLBACK_PORT = 3738;
@@ -100,9 +100,20 @@ async function registerClient(registrationEndpoint) {
 function waitForCallback(timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     let server;
+    let settled = false;
+    const finish = (err, code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (server) {
+        try { server.close(); } catch { /* ignore */ }
+      }
+      if (err) reject(err);
+      else resolve(code);
+    };
+
     const timer = setTimeout(() => {
-      server && server.close();
-      reject(new Error("OAuth timeout — browser flow not completed within 5 minutes"));
+      finish(new Error("OAuth timeout — browser flow not completed within 5 minutes"));
     }, timeoutMs);
 
     server = http.createServer((req, res) => {
@@ -119,17 +130,43 @@ function waitForCallback(timeoutMs = 5 * 60 * 1000) {
         res.end(`<html><body><h2>Alfred: Connected to Granola!</h2><p>You can close this tab.</p></body></html>`);
       }
 
-      clearTimeout(timer);
-      server.close();
-
-      if (error) reject(new Error(`OAuth error: ${error}`));
-      else resolve(code);
+      if (error) finish(new Error(`OAuth error: ${error}`));
+      else finish(null, code);
     });
 
-    server.listen(CALLBACK_PORT, (err) => {
-      if (err) { clearTimeout(timer); reject(err); }
+    // listen errors (EADDRINUSE etc.) are emitted, not passed to the listen callback
+    server.on("error", (err) => {
+      finish(err);
     });
+
+    server.listen(CALLBACK_PORT);
   });
+}
+
+/**
+ * Open a URL in the default browser.
+ * On Windows, never shell-interpolate the URL — `&` in query strings is a cmd
+ * command separator and silently breaks `exec('start ... "https://...?a=1&b=2"')`.
+ */
+function openBrowser(url) {
+  const platform = process.platform;
+  let child;
+  if (platform === "win32") {
+    // spawn args are not parsed by cmd; empty title arg is required by `start`
+    child = spawn("cmd", ["/c", "start", "", url], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else if (platform === "darwin") {
+    child = spawn("open", [url], { detached: true, stdio: "ignore" });
+  } else {
+    child = spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
+  }
+  child.on("error", (err) => {
+    console.error(`[Granola OAuth] Failed to open browser: ${err.message}`);
+  });
+  child.unref();
 }
 
 async function exchangeCode(tokenEndpoint, clientId, code, verifier) {
@@ -148,7 +185,12 @@ async function exchangeCode(tokenEndpoint, clientId, code, verifier) {
   return res.data;
 }
 
-async function runOAuthFlow() {
+/**
+ * Prepare OAuth: discovery + DCR + listen on callback port.
+ * Returns authUrl immediately so the UI can show a fallback link; complete()
+ * waits for the browser redirect and exchanges the code.
+ */
+async function prepareOAuthFlow() {
   const endpoints = await discoverEndpoints();
 
   if (!endpoints.registration_endpoint) {
@@ -158,26 +200,43 @@ async function runOAuthFlow() {
   const clientReg = await registerClient(endpoints.registration_endpoint);
   const { verifier, challenge } = generatePKCE();
 
-  const authUrl = new URL(endpoints.authorization_endpoint);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", clientReg.client_id);
-  authUrl.searchParams.set("redirect_uri", `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`);
-  authUrl.searchParams.set("code_challenge", challenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
+  const authUrlObj = new URL(endpoints.authorization_endpoint);
+  authUrlObj.searchParams.set("response_type", "code");
+  authUrlObj.searchParams.set("client_id", clientReg.client_id);
+  authUrlObj.searchParams.set("redirect_uri", `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`);
+  authUrlObj.searchParams.set("code_challenge", challenge);
+  authUrlObj.searchParams.set("code_challenge_method", "S256");
+  const authUrl = authUrlObj.toString();
 
-  console.log(`[Granola OAuth] Opening browser: ${authUrl.toString()}`);
-  exec(`open "${authUrl.toString()}"`);
-
-  const code = await waitForCallback();
-  const tokens = await exchangeCode(endpoints.token_endpoint, clientReg.client_id, code, verifier);
+  // Listen before the browser opens so the redirect cannot race the server bind.
+  const codePromise = waitForCallback();
 
   return {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token || null,
-    expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-    clientId: clientReg.client_id,
-    tokenEndpoint: endpoints.token_endpoint,
+    authUrl,
+    async complete() {
+      const code = await codePromise;
+      const tokens = await exchangeCode(
+        endpoints.token_endpoint,
+        clientReg.client_id,
+        code,
+        verifier
+      );
+      return {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || null,
+        expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+        clientId: clientReg.client_id,
+        tokenEndpoint: endpoints.token_endpoint,
+      };
+    },
   };
 }
 
-module.exports = { runOAuthFlow, httpsPost };
+async function runOAuthFlow() {
+  const flow = await prepareOAuthFlow();
+  console.log(`[Granola OAuth] Opening browser: ${flow.authUrl}`);
+  openBrowser(flow.authUrl);
+  return flow.complete();
+}
+
+module.exports = { runOAuthFlow, prepareOAuthFlow, openBrowser, httpsPost };
