@@ -125,6 +125,7 @@ function createSettingsPage() {
     .badge-red    { background: rgba(239,68,68,.1);  border-color: rgba(239,68,68,.3);  color: var(--red); }
     .badge-muted  { background: var(--surface2); border-color: var(--border); color: var(--muted); }
     .badge-blue   { background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.3); color: var(--blue); }
+    .badge-purple { background: rgba(168,85,247,.1); border-color: rgba(168,85,247,.3); color: var(--purple); }
 
     .chevron { color: var(--muted); font-size: 11px; transition: transform .2s; }
     .adapter.open .chevron { transform: rotate(90deg); }
@@ -282,10 +283,13 @@ function createSettingsPage() {
 </nav>
 
 <div class="layout">
-  <!-- Left: Adapters -->
+  <!-- Left: Adapters + Skills -->
   <div>
     <div class="section-title">Input Adapters</div>
     <div id="adapters-list">Loading...</div>
+
+    <div class="section-title" style="margin-top:24px">Skills</div>
+    <div id="skills-list">Loading...</div>
   </div>
 
   <!-- Right: Status + Events -->
@@ -788,6 +792,104 @@ async function loadAdapters() {
   }
 }
 
+// ── Skills (Phase 1 registry) ──────────────────────────────────────
+var skills = [];
+var openSkillIds = {};
+
+async function loadSkills() {
+  try {
+    var r = await fetch('/api/skills');
+    var j = await r.json();
+    skills = j.skills || [];
+    renderSkills();
+  } catch(e) {
+    document.getElementById('skills-list').textContent = 'Failed to load skills: ' + e.message;
+  }
+}
+
+function triggerBadge(t) {
+  var cls = t === 'schedule' ? 'badge-blue' : t === 'event' ? 'badge-yellow' : 'badge-purple';
+  return '<span class="badge ' + cls + '">' + esc((t || '').toUpperCase()) + '</span>';
+}
+
+function skillLastRanText(s) {
+  if (!s.lastRan) return 'Last ran: never';
+  try {
+    var d = new Date(s.lastRan);
+    var mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'Last ran: just now';
+    if (mins < 60) return 'Last ran: ' + mins + ' min ago';
+    return 'Last ran: ' + d.toLocaleString();
+  } catch(e) { return 'Last ran: ' + esc(s.lastRan); }
+}
+
+function renderSkills() {
+  var root = document.getElementById('skills-list');
+  if (!skills.length) { root.textContent = 'No skills registered.'; return; }
+  root.innerHTML = skills.map(function(s) { return makeSkillCard(s); }).join('');
+}
+
+function makeSkillCard(s) {
+  var isOpen = !!openSkillIds[s.id];
+  var enabledDot = s.enabled ? 'connected' : 'idle';
+  var stubBadge = s.runnable ? '' : '<span class="badge badge-yellow">stub</span>';
+  var enBadge = s.enabled
+    ? '<span class="badge badge-green">enabled</span>'
+    : '<span class="badge">disabled</span>';
+  return '<div class="adapter' + (isOpen ? ' open' : '') + '" id="skill-card-' + s.id + '">' +
+    '<div class="adapter-head" onclick="toggleSkillCard(\\'' + s.id + '\\')">' +
+      '<div class="adapter-dot ' + enabledDot + '"></div>' +
+      '<div>' +
+        '<div class="adapter-name">' + esc(s.label) + '</div>' +
+        '<div class="adapter-desc">' + esc(s.description) + '</div>' +
+      '</div>' +
+      '<div class="adapter-badges">' + enBadge + triggerBadge(s.trigger) + stubBadge + '</div>' +
+      '<span class="chevron">&#9654;</span>' +
+    '</div>' +
+    '<div class="adapter-body">' +
+      '<div class="adapter-desc" style="margin:8px 0">' + skillLastRanText(s) + '</div>' +
+      '<div class="btn-row">' +
+        '<button onclick="toggleSkill(\\'' + s.id + '\\',' + (!s.enabled) + ')">' +
+          (s.enabled ? 'Disable' : 'Enable') + '</button>' +
+        (s.runnable
+          ? '<button class="btn-success" onclick="runSkillNow(\\'' + s.id + '\\')">Run Now</button>'
+          : '<button disabled title="Stub skill">Run Now</button>') +
+      '</div>' +
+      '<div class="status-box" id="skill-status-' + s.id + '"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function toggleSkillCard(id) {
+  openSkillIds[id] = !openSkillIds[id];
+  var card = document.getElementById('skill-card-' + id);
+  if (card) card.classList.toggle('open', !!openSkillIds[id]);
+}
+
+async function toggleSkill(id, enabled) {
+  var st = document.getElementById('skill-status-' + id);
+  try {
+    var r = await fetch('/api/skills/' + id + '/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enabled })
+    });
+    var j = await r.json();
+    show(st, j, j.ok ? 'ok' : 'err');
+    if (j.ok) await loadSkills();
+  } catch(e) { show(st, e.message, 'err'); }
+}
+
+async function runSkillNow(id) {
+  var st = document.getElementById('skill-status-' + id);
+  try {
+    var r = await fetch('/api/skills/' + id + '/run-now', { method: 'POST' });
+    var j = await r.json();
+    show(st, j, j.ok ? 'ok' : 'err');
+    if (j.ok) setTimeout(loadSkills, 800);
+  } catch(e) { show(st, e.message, 'err'); }
+}
+
 async function loadRecentEvents() {
   try {
     var r = await fetch('/api/events/recent');
@@ -798,10 +900,11 @@ async function loadRecentEvents() {
 }
 
 // ── Init ───────────────────────────────────────────────────────────
-Promise.all([loadAdapters(), loadAlfredState(), loadRecentEvents()]);
+Promise.all([loadAdapters(), loadSkills(), loadAlfredState(), loadRecentEvents()]);
 connectSSE();
 setInterval(loadAlfredState, 8000);
 setInterval(loadRecentEvents, 5000);
+setInterval(loadSkills, 15000);
 </script>
 </body>
 </html>`;

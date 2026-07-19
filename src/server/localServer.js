@@ -5,6 +5,7 @@ const { createDemoPage } = require("./demoPage");
 const { resolveFabricateRequest, listScenarios } = require("../demo/nudgeFabricator");
 const { resolveStagePack, buildStageApplication, listStagePacks } = require("../demo/demoStage");
 const { idleGreetingDisplay } = require("./idleGreeting");
+const { listSkills, getSkill, isRunnable } = require("../processing/skillRegistry");
 
 function createLocalServer({ settingsStore, adapterManager, actuatorManager, outputHub, auditLog, stateStore, skillRunner, inputHitLog }) {
   let server = null;
@@ -125,6 +126,78 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
     if (req.method === "GET" && url.pathname === "/api/alfred/state") {
       const state = stateStore ? stateStore.get() : {};
       sendJson(res, 200, { ok: true, state });
+      return;
+    }
+
+    // Skills registry (Phase 1)
+    if (req.method === "GET" && url.pathname === "/api/skills") {
+      const lastRan = (stateStore && stateStore.get().skillLastRan) || {};
+      const skills = listSkills().map((s) => ({
+        ...s,
+        enabled: settingsStore.isSkillEnabled
+          ? settingsStore.isSkillEnabled(s.id)
+          : s.defaultEnabled,
+        lastRan: lastRan[s.id] || null,
+      }));
+      sendJson(res, 200, { ok: true, skills });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.match(/^\/api\/skills\/[^/]+\/run-now$/)) {
+      const skillId = url.pathname.split("/")[3];
+      const skill = getSkill(skillId);
+      if (!skill) {
+        sendJson(res, 404, { ok: false, message: `Unknown skill: ${skillId}` });
+        return;
+      }
+      if (!isRunnable(skillId)) {
+        sendJson(res, 501, { ok: false, message: `Skill is a stub / not runnable: ${skillId}` });
+        return;
+      }
+      if (settingsStore.isSkillEnabled && !settingsStore.isSkillEnabled(skillId)) {
+        sendJson(res, 409, { ok: false, message: `Skill disabled: ${skillId}` });
+        return;
+      }
+      const busy =
+        (skillRunner && typeof skillRunner.isRunning === "function" && skillRunner.isRunning()) ||
+        (stateStore && stateStore.get().processingStatus === "processing");
+      if (busy) {
+        sendJson(res, 409, { ok: false, message: "Pipeline busy — skill run skipped" });
+        return;
+      }
+      if (!skillRunner) {
+        sendJson(res, 503, { ok: false, message: "Skill runner unavailable" });
+        return;
+      }
+      const run =
+        typeof skillRunner.runSkill === "function"
+          ? () => skillRunner.runSkill(skillId, { trigger: "manual" })
+          : skillId === "garden-kb"
+            ? () => skillRunner.runGarden()
+            : null;
+      if (!run) {
+        sendJson(res, 501, { ok: false, message: `No run-now handler for ${skillId}` });
+        return;
+      }
+      run().catch((e) => console.error(`[Skill] run-now ${skillId}:`, e.message));
+      sendJson(res, 202, { ok: true, message: `Skill ${skillId} triggered`, skillId });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.match(/^\/api\/skills\/[^/]+\/toggle$/)) {
+      const skillId = url.pathname.split("/")[3];
+      if (!getSkill(skillId)) {
+        sendJson(res, 404, { ok: false, message: `Unknown skill: ${skillId}` });
+        return;
+      }
+      const body = await readBody(req);
+      const enabled = Boolean(body.enabled);
+      try {
+        const entry = await settingsStore.updateSkill(skillId, { enabled });
+        sendJson(res, 200, { ok: true, skillId, enabled: entry.enabled });
+      } catch (err) {
+        sendJson(res, 400, { ok: false, message: err.message });
+      }
       return;
     }
 

@@ -301,6 +301,17 @@ function createSkillRunner({ stateStore, outputHub }) {
   let periodicTimer = null;
   let gardenTimer = null;
 
+  function isRunning() {
+    return running;
+  }
+
+  async function markSkillRan(skillId) {
+    const prev = stateStore.get().skillLastRan || {};
+    await stateStore.patch({
+      skillLastRan: { ...prev, [skillId]: new Date().toISOString() },
+    });
+  }
+
   async function run(items) {
     if (running) { pending.push(...items); return; }
     running = true;
@@ -491,6 +502,7 @@ function createSkillRunner({ stateStore, outputHub }) {
       const gardened = await hopGarden(todos, state.dailySummary);
       const filed = gardened.filter((t) => t.vaultHint && !todos.find((o) => o.id === t.id)?.vaultHint).length;
       await stateStore.patch({ todos: gardened, processingLog: `[Garden] Filed ${filed} todo(s) into PARA.` });
+      await markSkillRan("garden-kb");
       console.log(`[Garden] Done — filed ${filed} todo(s)`);
       if (outputHub) await outputHub.publish({ channel: "alfred.garden.done", timestamp: new Date().toISOString(), filed });
     } catch (err) {
@@ -500,12 +512,44 @@ function createSkillRunner({ stateStore, outputHub }) {
   }
 
   return {
+    isRunning,
+
     async processNewItems(items) {
       await run(items);
     },
 
     async runGarden() {
       await runGarden();
+    },
+
+    /** Phase-1 run-now dispatcher for named registry skills. */
+    async runSkill(skillId, { trigger = "manual" } = {}) {
+      if (skillId === "garden-kb") {
+        await runGarden();
+        return { ok: true, skillId, trigger };
+      }
+      if (skillId === "create-todos" || skillId === "reprioritize" || skillId === "generate-nudges") {
+        const inbox = (stateStore.get().inbox || []).slice();
+        if (inbox.length) {
+          await run(inbox);
+        } else {
+          await stateStore.patch({
+            processingLog: `[Skill] ${skillId}: inbox empty — nothing to process`,
+          });
+          await markSkillRan(skillId);
+        }
+        return { ok: true, skillId, trigger, inboxCount: inbox.length };
+      }
+      if (skillId === "daily-notes") {
+        const state = stateStore.get();
+        await stateStore.patch({
+          processingLog: `[Skill] daily-notes: summary unchanged (use process pipeline for full hop)`,
+          dailySummary: state.dailySummary || "",
+        });
+        await markSkillRan("daily-notes");
+        return { ok: true, skillId, trigger };
+      }
+      return { ok: false, message: `Skill not runnable: ${skillId}` };
     },
 
     startPeriodic(intervalMs = 60000) {

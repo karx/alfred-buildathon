@@ -229,6 +229,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | Input hits | `src/inputs/inputHitLog.js` |
 | Pipeline | `src/pipeline/pipeline.js` |
 | Skill hops | `src/processing/skillRunner.js` |
+| Skills registry (Phase 1) | `src/processing/skillRegistry.js` · `GET/POST /api/skills` · Settings cards |
 | Meeting notes | `src/processing/knowledgeBase.js` |
 | State | `src/state/stateStore.js` |
 | Vault mirror | `src/state/vaultStateSync.js` |
@@ -297,7 +298,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 - [ ] Real vault FS verification as formal acceptance  
 - [x] Discord bot vs interactions decision — Gateway in + webhook out (`DISCORD_INTEGRATION.md`)
 - [x] Arduino desk-companion **automated** contract + sim e2e (`test/contract/*`, `test/inputs/arduinoSimE2e.test.js`); physical curl checklist in `ARDUINO_FIRMWARE.md` (run when hardware is on desk)
-- [ ] Full named skills registry (`SKILLS_DESIGN.md`)  
+- [x] Named skills registry **Phase 1** (registry + settings toggles + run-now); Phase 2+ scheduler/ADHD still open (`SKILLS_DESIGN.md`)
 - [ ] Several first-acceptance UI checkboxes still open in `TODO.md` (functionality largely exists; formal sign-off pending)
 
 ---

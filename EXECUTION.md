@@ -70,26 +70,26 @@ Freezes the surfaces the desk companion depends on, so the registry/scheduler re
 
 ## Item 3 — Skills registry (SKILLS_DESIGN Phase 1)
 
-**Status:** `todo` · **Depends on:** Item 2 · **Size:** M
+**Status:** `done` · **Depends on:** Item 2 · **Size:** M · **Completed:** 2026-07-20
 
 Named skill registry with settings toggles and run-now — SKILLS_DESIGN.md Phase 1, exactly as scoped there.
 
 ### Red
-- [ ] `test/processing/skillRegistry.test.js` — failing tests:
-  - [ ] `SKILL_REGISTRY` exposes the embedded hops as named skills (`garden-kb`, `create-todos`, `reprioritize`, `generate-nudges`, `daily-notes`) each with `id`, `label`, `description`, `trigger`, `defaultEnabled`.
-  - [ ] ADHD-pack skills present but marked stub/not-runnable.
-  - [ ] settings `skills` block round-trips: disabled skill reports `enabled: false`; unknown ids rejected.
-- [ ] `test/server/skillsApi.test.js` — failing tests: `GET /api/skills` lists registry + enabled state + lastRan; `POST /api/skills/:id/run-now` fires the skill (assert via state/log effect), 404 on unknown id, 409/skip while pipeline busy.
+- [x] `test/processing/skillRegistry.test.js` — failing tests:
+  - [x] `SKILL_REGISTRY` exposes the embedded hops as named skills (`garden-kb`, `create-todos`, `reprioritize`, `generate-nudges`, `daily-notes`) each with `id`, `label`, `description`, `trigger`, `defaultEnabled`.
+  - [x] ADHD-pack skills present but marked stub/not-runnable.
+  - [x] settings `skills` block round-trips: disabled skill reports `enabled: false`; unknown ids rejected.
+- [x] `test/server/skillsApi.test.js` — failing tests: `GET /api/skills` lists registry + enabled state + lastRan; `POST /api/skills/:id/run-now` fires the skill (assert via state/log effect), 404 on unknown id, 409/skip while pipeline busy.
 
 ### Green
-- [ ] `src/processing/skillRegistry.js` — `SKILL_REGISTRY` constant per SKILLS_DESIGN.md §Skill Registry.
-- [ ] Extend settings storage with `skills` block (`config/settings.local.json` shape per SKILLS_DESIGN.md §Settings Storage).
-- [ ] `GET /api/skills` + `POST /api/skills/:id/run-now` in `src/server/localServer.js`.
-- [ ] Skills section on `/settings` (`src/server/settingsPage.js`) — collapsible cards, same pattern as adapter cards: toggle, badge, last-ran, Run Now.
+- [x] `src/processing/skillRegistry.js` — `SKILL_REGISTRY` constant per SKILLS_DESIGN.md §Skill Registry.
+- [x] Extend settings storage with `skills` block (`config/settings.local.json` shape per SKILLS_DESIGN.md §Settings Storage).
+- [x] `GET /api/skills` + `POST /api/skills/:id/run-now` in `src/server/localServer.js`.
+- [x] Skills section on `/settings` (`src/server/settingsPage.js`) — collapsible cards, same pattern as adapter cards: toggle, badge, last-ran, Run Now.
 
 ### Refactor / close-out
-- [ ] Full `npm test` green; contract tests from Item 2 untouched.
-- [ ] Update CURRENT_STATE.md §6 implementation map + §7 milestone ("Full named skills registry" → partial: Phase 1 done).
+- [x] Full `npm test` green; contract tests from Item 2 untouched.
+- [x] Update CURRENT_STATE.md §6 implementation map + §7 milestone ("Full named skills registry" → partial: Phase 1 done).
 
 ---
 
@@ -155,3 +155,4 @@ CI workflow (GitHub Actions `npm ci && npm test` — repo has remote `github.com
 | 2026-07-19 | — | Plan created. Baseline: 61/61 tests green. |
 | 2026-07-20 | 1 | `starts[]` shipped. Normalizer + applyStarts pure helpers; hopExtract prompt; suite 66/66 green. |
 | 2026-07-20 | 2 | Desk-companion contract + Arduino sim e2e frozen; physical checklist in ARDUINO_FIRMWARE.md; await clearBuzzer on /api/state. |
+| 2026-07-20 | 3 | Skills registry Phase 1: SKILL_REGISTRY, settings.skills, GET/POST /api/skills, Settings cards. |
