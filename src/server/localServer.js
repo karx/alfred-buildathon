@@ -100,7 +100,13 @@ function createLocalServer({ settingsStore, adapterManager, actuatorManager, out
       let led = "green";
       // Idle fallback: "Good Morning/Day/Evening - <random minified greeting>"
       let display = idleGreetingDisplay();
-      if (isProcessing) { led = "red"; display = "Processing..."; }
+      const activeSkillLabel = state.activeSkill?.label
+        ? String(state.activeSkill.label).slice(0, 20)
+        : null;
+      if (isProcessing || activeSkillLabel) {
+        led = "red";
+        display = activeSkillLabel || "Processing...";
+      }
       else if (activeNudge) { led = "red"; display = String(activeNudge.text || "").slice(0, 20); }
       else if (isInMeeting) { led = "blue"; display = (state.nowState?.context || "In meeting").slice(0, 20); }
 

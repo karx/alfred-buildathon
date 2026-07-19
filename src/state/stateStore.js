@@ -13,6 +13,11 @@ const DEFAULT_STATE = {
   seenVaultPaths: [],
   pendingBuzzer: false,
   lastProcessedAt: null,
+  /** @type {null | { id: string, label: string }} */
+  activeSkill: null,
+  /** Recent background skill runs (last 5), for /live Background Activity */
+  skillRuns: [],
+  skillLastRan: {},
 };
 
 function createStateStore({ filePath }) {

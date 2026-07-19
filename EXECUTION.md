@@ -118,23 +118,23 @@ Replace ad-hoc timers with a scheduler driven by the registry + settings. **Adop
 
 ## Item 5 — Background-skill surfacing (SSE + /live panel + hardware label)
 
-**Status:** `todo` · **Depends on:** Items 3–4 · **Size:** S/M
+**Status:** `done` · **Depends on:** Items 3–4 · **Size:** S/M · **Completed:** 2026-07-20
 
 SKILLS_DESIGN mandate: "All background skill runs MUST be visible."
 
 ### Red
-- [ ] `test/outputs/skillEvents.test.js` — failing tests: scheduler/run-now emits `alfred.skill.started` / `alfred.skill.done` / `alfred.skill.error` on the output hub with `{ skillId, trigger, timestamp }` (+ `summary`/`error`).
-- [ ] Extend `test/contract/sseContract.test.js` (Item 2) **deliberately** to admit the new `alfred.skill.*` names (per protocol §4).
-- [ ] `test/server/stateApiSkillLabel.test.js` — failing test: while a skill runs, `/api/state` `display` shows the skill label truncated to 20 chars instead of generic `Processing...`.
+- [x] `test/outputs/skillEvents.test.js` — failing tests: scheduler/run-now emits `alfred.skill.started` / `alfred.skill.done` / `alfred.skill.error` on the output hub with `{ skillId, trigger, timestamp }` (+ `summary`/`error`).
+- [x] Extend `test/contract/sseContract.test.js` (Item 2) **deliberately** to admit the new `alfred.skill.*` names (per protocol §4).
+- [x] `test/server/stateApiSkillLabel.test.js` — failing test: while a skill runs, `/api/state` `display` shows the skill label truncated to 20 chars instead of generic `Processing...`.
 
 ### Green
-- [ ] Emit skill events from scheduler + run-now path (flows to `/settings` live feed automatically via existing `pushEvent()`).
-- [ ] Background Activity panel on `/live` (`src/server/livePage.js`): current run indicator + last 5 completed runs.
-- [ ] Hardware display label in the `/api/state` projection.
+- [x] Emit skill events from scheduler + run-now path (flows to `/settings` live feed automatically via existing `pushEvent()`).
+- [x] Background Activity panel on `/live` (`src/server/livePage.js`): current run indicator + last 5 completed runs.
+- [x] Hardware display label in the `/api/state` projection.
 
 ### Refactor / close-out
-- [ ] Full `npm test` green.
-- [ ] Update CURRENT_STATE.md §5 hardware projection table + §6.
+- [x] Full `npm test` green.
+- [x] Update CURRENT_STATE.md §5 hardware projection table + §6.
 
 ---
 
@@ -157,3 +157,4 @@ CI workflow (GitHub Actions `npm ci && npm test` — repo has remote `github.com
 | 2026-07-20 | 2 | Desk-companion contract + Arduino sim e2e frozen; physical checklist in ARDUINO_FIRMWARE.md; await clearBuzzer on /api/state. |
 | 2026-07-20 | 3 | Skills registry Phase 1: SKILL_REGISTRY, settings.skills, GET/POST /api/skills, Settings cards. |
 | 2026-07-20 | 4 | Skill scheduler Phase 2: fake-timer tests; garden-kb vault-gated; serialize skip-if-busy; garden interval removed from skillRunner. |
+| 2026-07-20 | 5 | Background skill surfacing: alfred.skill.* SSE, /live Background Activity, hardware skill label on /api/state. Stretch complete. |

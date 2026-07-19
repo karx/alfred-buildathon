@@ -749,6 +749,16 @@ function createLivePage() {
     <div id="nudges-list"><div class="empty-col">// NO ACTIVE NUDGES</div></div>
   </div>
 
+  <!-- Background skill activity -->
+  <div class="crt-section">
+    <div class="sec-hdr">
+      <span class="sec-hdr-title">▸ BACKGROUND ACTIVITY</span>
+      <span class="sec-hdr-line" aria-hidden="true"></span>
+    </div>
+    <div id="skill-current" class="t-val dim">// NO SKILL RUNNING</div>
+    <div id="skill-runs" style="margin-top:8px"><div class="empty-col">// NO RECENT RUNS</div></div>
+  </div>
+
   <!-- Daily brief -->
   <div class="crt-section">
     <div class="sec-hdr">
@@ -888,6 +898,28 @@ function createLivePage() {
           </div>\`;
         }).join("")
       : '<div class="empty-col">// NO ACTIVE NUDGES</div>';
+
+    // Background skill activity
+    const activeSkill = state.activeSkill;
+    const skillCur = document.getElementById("skill-current");
+    if (activeSkill && activeSkill.label) {
+      skillCur.textContent = "▶ RUNNING · " + activeSkill.label;
+      skillCur.className = "t-val processing";
+    } else {
+      skillCur.textContent = "// NO SKILL RUNNING";
+      skillCur.className = "t-val dim";
+    }
+    const runs = state.skillRuns || [];
+    document.getElementById("skill-runs").innerHTML = runs.length
+      ? runs.slice(0, 5).map(r => {
+          const st = r.status === "error" ? "ERR" : "OK";
+          const when = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : "";
+          return \`<div class="nudge">
+            <span class="npri \${r.status === "error" ? "high" : "low"}">[\${st}]</span>
+            <span class="ntext">\${esc(r.label || r.skillId)} · \${esc(r.trigger || "?")} · \${esc(r.summary || "")} · \${esc(when)}</span>
+          </div>\`;
+        }).join("")
+      : '<div class="empty-col">// NO RECENT RUNS</div>';
 
     // TODOs
     const todos = state.todos || [];

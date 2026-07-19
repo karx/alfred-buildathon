@@ -203,7 +203,8 @@ skillScheduler arms interval timers from registry + settings.skills
 
 | Condition | LED | Display |
 |-----------|-----|---------|
-| Processing | red | `Processing...` |
+| Active skill run | red | skill label (≤20) |
+| Processing (no skill label) | red | `Processing...` |
 | Active nudge | red | nudge text (≤20) |
 | Meeting mode | blue | context or `In meeting` |
 | Idle | green | `Good Morning/Day/Evening - <minified>` (sticky ~5 min) |
@@ -214,8 +215,9 @@ Also returns: `buzzer`, `nudgeId`, `nudgeText`, `nudgeCount`, `processingStatus`
 
 ```txt
 stateStore.onChange  → SSE  alfred.state.updated { state }
-outputHub.publish    → SSE  pipeline.* / alfred.*
+outputHub.publish    → SSE  pipeline.* / alfred.* / alfred.skill.*
 inputHitLog          → SSE  alfred.input.hit
+skill runs           → SSE  alfred.skill.started|done|error · state.activeSkill · skillRuns[5]
 ```
 
 Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
@@ -234,6 +236,7 @@ Browsers use SSE (`/events`). Hardware uses **pull** (`/api/state`).
 | Skill hops | `src/processing/skillRunner.js` |
 | Skills registry (Phase 1) | `src/processing/skillRegistry.js` · `GET/POST /api/skills` · Settings cards |
 | Skill scheduler (Phase 2) | `src/processing/skillScheduler.js` · replaces ad-hoc garden interval |
+| Skill surfacing | `alfred.skill.*` SSE · `/live` Background Activity · hardware skill label |
 | Meeting notes | `src/processing/knowledgeBase.js` |
 | State | `src/state/stateStore.js` |
 | Vault mirror | `src/state/vaultStateSync.js` |

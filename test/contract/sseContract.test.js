@@ -16,6 +16,10 @@ const REQUIRED_SSE_CHANNELS = [
   "alfred.state.updated",
   "alfred.input.hit",
   "pipeline.event",
+  // Item 5 — deliberately extended for background skill visibility
+  "alfred.skill.started",
+  "alfred.skill.done",
+  "alfred.skill.error",
 ];
 
 function collectSse(baseUrl, { timeoutMs = 2000 } = {}) {
@@ -130,7 +134,7 @@ test("SSE stream emits alfred.input.hit and pipeline.event via outputHub / pipel
 });
 
 test("frozen SSE channel catalog documents required names", () => {
-  // Guardrail: these names are the contract. Item 5 may extend deliberately.
+  // Guardrail: these names are the contract. Item 5 extended deliberately with alfred.skill.*.
   for (const name of REQUIRED_SSE_CHANNELS) {
     assert.equal(typeof name, "string");
     assert.ok(name.length > 0);
@@ -138,4 +142,7 @@ test("frozen SSE channel catalog documents required names", () => {
   assert.ok(REQUIRED_SSE_CHANNELS.includes("alfred.state.updated"));
   assert.ok(REQUIRED_SSE_CHANNELS.includes("alfred.input.hit"));
   assert.ok(REQUIRED_SSE_CHANNELS.some((c) => c.startsWith("pipeline.")));
+  assert.ok(REQUIRED_SSE_CHANNELS.includes("alfred.skill.started"));
+  assert.ok(REQUIRED_SSE_CHANNELS.includes("alfred.skill.done"));
+  assert.ok(REQUIRED_SSE_CHANNELS.includes("alfred.skill.error"));
 });

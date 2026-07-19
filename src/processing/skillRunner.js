@@ -1,6 +1,7 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { GoogleGenAI } = require("@google/genai");
 const crypto = require("crypto");
+const { getSkill } = require("./skillRegistry");
 
 // ── LLM provider ──────────────────────────────────────────────────
 
@@ -309,6 +310,21 @@ function createSkillRunner({ stateStore, outputHub }) {
     });
   }
 
+  async function recordSkillRun(entry) {
+    const prev = stateStore.get().skillRuns || [];
+    const skillRuns = [entry, ...prev].slice(0, 5);
+    await stateStore.patch({ skillRuns });
+  }
+
+  async function emitSkill(channel, payload) {
+    if (!outputHub) return;
+    await outputHub.publish({
+      channel,
+      timestamp: new Date().toISOString(),
+      ...payload,
+    });
+  }
+
   async function run(items) {
     if (running) { pending.push(...items); return; }
     running = true;
@@ -485,11 +501,17 @@ function createSkillRunner({ stateStore, outputHub }) {
   }
 
   async function runGarden() {
-    if (running) { console.log("[Garden] Skipping — main pipeline busy"); return; }
+    if (running) {
+      console.log("[Garden] Skipping — main pipeline busy");
+      return { ok: false, skipped: true, error: "busy" };
+    }
     const state = stateStore.get();
     const todos = state.todos || [];
     const needsHint = todos.filter((t) => !t.vaultHint && t.status !== "done");
-    if (!needsHint.length) { console.log("[Garden] All todos already filed"); return; }
+    if (!needsHint.length) {
+      console.log("[Garden] All todos already filed");
+      return { ok: true, filed: 0, summary: "All todos already filed" };
+    }
 
     console.log(`[Garden] Filing ${needsHint.length} todo(s) into PARA...`);
     await stateStore.patch({ processingLog: `[Garden] Filing ${needsHint.length} todo(s) into PARA...` });
@@ -498,13 +520,16 @@ function createSkillRunner({ stateStore, outputHub }) {
     try {
       const gardened = await hopGarden(todos, state.dailySummary);
       const filed = gardened.filter((t) => t.vaultHint && !todos.find((o) => o.id === t.id)?.vaultHint).length;
-      await stateStore.patch({ todos: gardened, processingLog: `[Garden] Filed ${filed} todo(s) into PARA.` });
+      const summary = `Filed ${filed} todo(s) into PARA.`;
+      await stateStore.patch({ todos: gardened, processingLog: `[Garden] ${summary}` });
       await markSkillRan("garden-kb");
       console.log(`[Garden] Done — filed ${filed} todo(s)`);
       if (outputHub) await outputHub.publish({ channel: "alfred.garden.done", timestamp: new Date().toISOString(), filed });
+      return { ok: true, filed, summary };
     } catch (err) {
       console.error("[Garden] Error:", err.message);
       await stateStore.patch({ processingLog: `[Garden] Error: ${err.message}` });
+      return { ok: false, error: err.message };
     }
   }
 
@@ -516,37 +541,72 @@ function createSkillRunner({ stateStore, outputHub }) {
     },
 
     async runGarden() {
-      await runGarden();
+      return runGarden();
     },
 
-    /** Phase-1 run-now dispatcher for named registry skills. */
+    /** Named registry skill entrypoint — emits alfred.skill.* and sets activeSkill for hardware display. */
     async runSkill(skillId, { trigger = "manual" } = {}) {
-      if (skillId === "garden-kb") {
-        await runGarden();
-        return { ok: true, skillId, trigger };
-      }
-      if (skillId === "create-todos" || skillId === "reprioritize" || skillId === "generate-nudges") {
-        const inbox = (stateStore.get().inbox || []).slice();
-        if (inbox.length) {
-          await run(inbox);
-        } else {
+      const meta = getSkill(skillId);
+      const label = meta?.label || skillId;
+      const startedAt = new Date().toISOString();
+
+      await stateStore.patch({ activeSkill: { id: skillId, label } });
+      await emitSkill("alfred.skill.started", { skillId, trigger, timestamp: startedAt });
+
+      try {
+        let summary = "";
+        if (skillId === "garden-kb") {
+          const r = await runGarden();
+          if (r && r.ok === false && r.error && !r.skipped) {
+            throw new Error(r.error);
+          }
+          summary = r?.summary || stateStore.get().processingLog || "garden done";
+        } else if (skillId === "create-todos" || skillId === "reprioritize" || skillId === "generate-nudges") {
+          const inbox = (stateStore.get().inbox || []).slice();
+          if (inbox.length) {
+            await run(inbox);
+            summary = `Processed ${inbox.length} inbox item(s)`;
+          } else {
+            summary = "inbox empty — nothing to process";
+            await stateStore.patch({ processingLog: `[Skill] ${skillId}: ${summary}` });
+            await markSkillRan(skillId);
+          }
+        } else if (skillId === "daily-notes") {
+          const state = stateStore.get();
+          summary = "summary unchanged (use process pipeline for full hop)";
           await stateStore.patch({
-            processingLog: `[Skill] ${skillId}: inbox empty — nothing to process`,
+            processingLog: `[Skill] daily-notes: ${summary}`,
+            dailySummary: state.dailySummary || "",
           });
-          await markSkillRan(skillId);
+          await markSkillRan("daily-notes");
+        } else {
+          throw new Error(`Skill not runnable: ${skillId}`);
         }
-        return { ok: true, skillId, trigger, inboxCount: inbox.length };
-      }
-      if (skillId === "daily-notes") {
-        const state = stateStore.get();
-        await stateStore.patch({
-          processingLog: `[Skill] daily-notes: summary unchanged (use process pipeline for full hop)`,
-          dailySummary: state.dailySummary || "",
+
+        await recordSkillRun({
+          skillId,
+          label,
+          trigger,
+          status: "done",
+          summary,
+          timestamp: new Date().toISOString(),
         });
-        await markSkillRan("daily-notes");
-        return { ok: true, skillId, trigger };
+        await emitSkill("alfred.skill.done", { skillId, trigger, summary });
+        return { ok: true, skillId, trigger, summary };
+      } catch (err) {
+        await recordSkillRun({
+          skillId,
+          label,
+          trigger,
+          status: "error",
+          summary: err.message,
+          timestamp: new Date().toISOString(),
+        });
+        await emitSkill("alfred.skill.error", { skillId, trigger, error: err.message });
+        return { ok: false, skillId, trigger, error: err.message };
+      } finally {
+        await stateStore.patch({ activeSkill: null });
       }
-      return { ok: false, message: `Skill not runnable: ${skillId}` };
     },
 
     startPeriodic(intervalMs = 60000) {
